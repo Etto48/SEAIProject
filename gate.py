@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+torch.set_default_device(device)
+
 class GateAutoencoder(nn.Module):
     def __init__(self, in_out_shape=(3,32,32),  depth=3, hidden_dim=128, latent_dim=128):
         super(GateAutoencoder, self).__init__()

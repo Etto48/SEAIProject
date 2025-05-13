@@ -4,6 +4,9 @@ import torch.nn as nn
 from torch.utils.data import IterableDataset, Dataset, DataLoader
 from tqdm import tqdm
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+torch.set_default_device(device)
+
 class ExpertMLP(nn.Module):
 	def __init__(self, input_feature: int, hidden_features: int, output_features: int):
 		super(ExpertMLP, self).__init__()
