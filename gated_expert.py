@@ -1,8 +1,11 @@
 import copy
 import torch
 import torch.nn as nn
+from torchvision import datasets, transforms
 from torch.utils.data import IterableDataset, Dataset, DataLoader
 from tqdm.auto import tqdm
+import matplotlib.pyplot as plt
+import numpy as np
 
 from expert import ExpertMLP
 from gate import GateAutoencoder
@@ -52,7 +55,7 @@ class GatedExpert(nn.Module):
         self.expert_optimizers.append(torch.optim.Adam(expert.parameters(), lr=1e-3))
     
     def new_task_was_recently_added(self):
-        return self.time_since_new_task < self.hold_time_after_new_task
+        return self.time_since_new_task < self.hold_time_after_new_task and not self.task_aware
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor | None = None):
         # x (B, C, H, W)
@@ -98,7 +101,7 @@ class GatedExpert(nn.Module):
     def fit(self, train_dataset: IterableDataset, test_dataset: Dataset | None = None):
         train_loader = DataLoader(train_dataset, batch_size=32)
         if test_dataset is not None:
-            test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=32, generator=torch.Generator(device=device))
 
         loading_bar = tqdm(train_loader, total=len(train_loader), desc="Training", unit="batch")
         for i, batch in enumerate(loading_bar):
@@ -135,12 +138,38 @@ class GatedExpert(nn.Module):
                     gate_optimizer.step()
                     expert_optimzer.step()
             loading_bar.set_postfix({"loss": loss.item(), "e": expert_loss.item(), "g": gate_loss.item(), "n": len(self.gates)})
-
+        if test_dataset is not None:
+            self.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                loading_bar = tqdm(test_loader, desc="Testing", total=len(test_loader))
+                confusion_matrix = torch.zeros(10, 10, dtype=torch.int64)
+                for x, y in loading_bar:
+                    x = x.to(device)
+                    y = y.to(device)
+                    logits, indices, min_reconstruction_errors, relevance_scores, mask = self(x)
+                    outputs = logits
+                    total += y.shape[0]
+                    correct += (outputs.argmax(dim=1) == y).sum().item()
+                    accuracy = correct / total
+                    confusion_matrix += torch.bincount(y * 10 + outputs.argmax(dim=1), minlength=100).reshape(10, 10)
+                    loading_bar.set_postfix(accuracy=f"{accuracy:.2%}")
+            plt.figure(figsize=(10, 10))
+            plt.imshow(confusion_matrix.cpu(), interpolation='nearest')
+            plt.colorbar()
+            plt.title("Confusion Matrix")
+            plt.xlabel("Predicted Label")
+            plt.ylabel("True Label")
+            plt.xticks(np.arange(10))
+            plt.yticks(np.arange(10))
+            plt.show()
 
 def main():
-    dataset = SplitMNIST(task_duration=10000)
+    train_dataset = SplitMNIST(task_duration=100000)
+    test_dataset = datasets.MNIST(root='data', train=False, download=True, transform=train_dataset.transform, target_transform=torch.tensor)
     model = GatedExpert()
-    model.fit(dataset)
+    model.fit(train_dataset, test_dataset)
     
 if __name__ == "__main__":
     main()
