@@ -88,7 +88,7 @@ class GatedExpert(nn.Module):
             if torch.all(~mask[i]):
                 continue
             #expert_input = latent_representations[i][mask[i]]
-            expert_input = x[i]
+            expert_input = x[mask[i]]
             expert_output = expert(expert_input)
             logits[mask[i]] = expert_output
 
