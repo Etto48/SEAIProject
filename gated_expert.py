@@ -81,7 +81,7 @@ class GatedExpert(nn.Module):
         min_reconstruction_errors, indices = torch.min(reconstruction_errors, dim=0)
         # mask (N_gates, B)
         if mask is None:
-            mask = torch.arange(len(self.gates)).unsqueeze(1) == indices.unsqueeze(0)
+            mask = torch.arange(len(self.gates)).unsqueeze(0) == indices.unsqueeze(1)
         # classes (B, classes)
         logits = torch.zeros(x.shape[0], self.classes)
         for i, expert in enumerate(self.experts):
@@ -95,7 +95,9 @@ class GatedExpert(nn.Module):
 
     def mask_from_task_ids(self, task_ids: torch.Tensor):
         max_task_id = task_ids.max()
+        print(task_ids)
         mask = torch.arange(max_task_id + 1).unsqueeze(1) == task_ids.unsqueeze(0)
+        print(mask)
         return mask
 
     def fit(self, train_dataset: IterableDataset, test_dataset: Dataset | None = None):
@@ -178,7 +180,7 @@ class GatedExpert(nn.Module):
             reconstructions = torch.stack(reconstructions, dim=0)
             original_images = original_images.detach().cpu().numpy()
             reconstructions = reconstructions.detach().cpu().numpy()
-            fig, axes = plt.subplots(11, 10)
+            fig, axes = plt.subplots(len(self.gates)+1, 10)
             for i in range(10):
                 axes[0, i].imshow(original_images[i].squeeze(), cmap='gray')
                 axes[0, i].axis('off')
