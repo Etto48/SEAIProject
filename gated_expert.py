@@ -18,8 +18,8 @@ torch.set_default_device(device)
 class GatedExpert(nn.Module):
     def __init__(self, in_out_shape=(1, 28, 28), classes=10, depth=2, hidden_dim=128, latent_dim=128, task_aware=True):
         super(GatedExpert, self).__init__()
-        self.gates = nn.ModuleList()
-        self.experts = nn.ModuleList()
+        self.gates = []
+        self.experts = []
         self.gate_optimizers = []
         self.expert_optimizers = []
         self.in_out_shape = in_out_shape
