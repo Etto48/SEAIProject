@@ -115,14 +115,13 @@ class GatedExpert(nn.Module):
             task_ids = task_ids.to(device)
             if task_ids.max() > len(self.gates) - 1:
                 self.new_task()
-                mask = self.mask_from_task_ids(task_ids)
-                print(mask)
 
             task_distribution[task_ids] += 1
             
 
             self.train()
             mask = self.mask_from_task_ids(task_ids)
+            print(mask)
             for j in range(len(self.gates)):
                 self.gate_optimizers[j].zero_grad()
                 self.expert_optimizers[j].zero_grad()
