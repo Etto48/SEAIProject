@@ -1,4 +1,5 @@
 import copy
+import sys
 import torch
 import torch.nn as nn
 from torchvision import datasets, transforms
@@ -81,7 +82,8 @@ class GatedExpert(nn.Module):
         min_reconstruction_errors, indices = torch.min(reconstruction_errors, dim=0)
         # mask (N_gates, B)
         if mask is None:
-            mask = torch.arange(len(self.gates)).unsqueeze(0) == indices.unsqueeze(1)
+            mask = torch.arange(len(self.gates)).unsqueeze(1) == indices.unsqueeze(0)
+        print(mask)
         # classes (B, classes)
         logits = torch.zeros(x.shape[0], self.classes)
         for i, expert in enumerate(self.experts):
@@ -95,9 +97,7 @@ class GatedExpert(nn.Module):
 
     def mask_from_task_ids(self, task_ids: torch.Tensor):
         max_task_id = task_ids.max()
-        #print(task_ids)
         mask = torch.arange(max_task_id + 1).unsqueeze(1) == task_ids.unsqueeze(0)
-        #print(mask)
         return mask
 
     def fit(self, train_dataset: IterableDataset, test_dataset: Dataset | None = None):
@@ -131,7 +131,7 @@ class GatedExpert(nn.Module):
             elif not self.task_aware:
                 self.time_since_new_task += 1
             expert_loss = self.expert_loss(logits, targets)
-            gate_loss = min_reconstruction_errors.mean()
+            gate_loss = min_reconstruction_errors.sum()
             loss = expert_loss + gate_loss
             loss.backward()
             for i, (gate_optimizer, expert_optimzer) \
@@ -188,10 +188,6 @@ class GatedExpert(nn.Module):
                     axes[j + 1, i].imshow(reconstructions[j, i].squeeze(), cmap='gray')
                     axes[j + 1, i].axis('off')
             plt.show()
-
-            
-
-
 
 def main():
     train_dataset = SplitMNIST(task_duration=100000)
