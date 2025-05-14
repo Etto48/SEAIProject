@@ -83,7 +83,6 @@ class GatedExpert(nn.Module):
         # mask (N_gates, B)
         if mask is None:
             mask = torch.arange(len(self.gates)).unsqueeze(1) == indices.unsqueeze(0)
-        print(mask)
         # classes (B, classes)
         logits = torch.zeros(x.shape[0], self.classes)
         for i, expert in enumerate(self.experts):
@@ -190,7 +189,7 @@ class GatedExpert(nn.Module):
             plt.show()
 
 def main():
-    train_dataset = SplitMNIST(task_duration=100000)
+    train_dataset = SplitMNIST(task_duration=10000)
     test_dataset = datasets.MNIST(root='data', train=False, download=True, transform=train_dataset.transform, target_transform=torch.tensor)
     model = GatedExpert()
     model.fit(train_dataset, test_dataset)
