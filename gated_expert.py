@@ -176,8 +176,8 @@ class GatedExpert(nn.Module):
                 recon, _ = gate(original_images)
                 reconstructions.append(recon)
             reconstructions = torch.stack(reconstructions, dim=0)
-            original_images = original_images.cpu().numpy()
-            reconstructions = reconstructions.cpu().numpy()
+            original_images = original_images.detach().cpu().numpy()
+            reconstructions = reconstructions.detach().cpu().numpy()
             fig, axes = plt.subplots(11, 10)
             for i in range(10):
                 axes[0, i].imshow(original_images[i].squeeze(), cmap='gray')
