@@ -169,17 +169,27 @@ class GatedExpert(nn.Module):
             plt.yticks(np.arange(10))
             plt.show()
             # demo some images and autoencode them with all gates
+            original_images = [test_dataset[i] for i in range(10)]
+            original_images = torch.stack([img for img, _ in original_images], dim=0).to(device)
+            reconstructions = []
+            for gate in self.gates:
+                recon, _ = gate(original_images)
+                reconstructions.append(recon)
+            reconstructions = torch.stack(reconstructions, dim=0)
+            original_images = original_images.cpu().numpy()
+            reconstructions = reconstructions.cpu().numpy()
+            fig, axes = plt.subplots(11, 10)
             for i in range(10):
-                plt.subplot(2, 5, i + 1)
-                plt.imshow(x[i].cpu().squeeze(), cmap='gray')
-                plt.axis('off')
+                axes[0, i].imshow(original_images[i].squeeze(), cmap='gray')
+                axes[0, i].axis('off')
+                for j in range(len(self.gates)):
+                    axes[j + 1, i].imshow(reconstructions[j, i].squeeze(), cmap='gray')
+                    axes[j + 1, i].axis('off')
             plt.show()
-            for i in range(len(self.gates)):
-                plt.subplot(2, 5, i + 1)
-                recon, _ = self.gates[i](x[:10])
-                plt.imshow(recon[0].cpu().squeeze(), cmap='gray')
-                plt.axis('off')
-            plt.show()
+
+            
+
+
 
 def main():
     train_dataset = SplitMNIST(task_duration=100000)
