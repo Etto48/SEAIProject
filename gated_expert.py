@@ -107,6 +107,7 @@ class GatedExpert(nn.Module):
             test_loader = DataLoader(test_dataset, batch_size=32, generator=torch.Generator(device=device))
 
         loading_bar = tqdm(train_loader, total=len(train_loader), desc="Training", unit="batch")
+        task_distribution = torch.zeros(5, device=device)
         for i, batch in enumerate(loading_bar):
             images, targets, task_ids = batch
             images = images.to(device)
@@ -114,6 +115,9 @@ class GatedExpert(nn.Module):
             task_ids = task_ids.to(device)
             if task_ids.max() > len(self.gates) - 1:
                 self.new_task()
+
+            task_distribution[task_ids] += 1
+            
 
             self.train()
             mask = self.mask_from_task_ids(task_ids)
@@ -151,6 +155,11 @@ class GatedExpert(nn.Module):
                     accuracy = correct / total
                     confusion_matrix += torch.bincount(y * 10 + outputs.argmax(dim=1), minlength=100).reshape(10, 10)
                     loading_bar.set_postfix(accuracy=f"{accuracy:.2%}")
+            # print task distribution
+            task_distribution /= task_distribution.sum()
+            task_distribution = task_distribution.cpu().numpy()
+            print("Task distribution:", task_distribution)
+            
             plt.figure(figsize=(10, 10))
             plt.imshow(confusion_matrix.cpu(), interpolation='nearest')
             plt.colorbar()
