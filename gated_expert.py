@@ -118,17 +118,17 @@ class GatedExpert(nn.Module):
 
             self.train()
             mask = self.mask_from_task_ids(task_ids)
-            for j, (gate, expert, gate_optimizer, expert_optimizer) in enumerate(zip(self.gates, self.experts, self.gate_optimizers, self.expert_optimizers)):
-                gate_optimizer.zero_grad()
-                expert_optimizer.zero_grad()
-                recon, latent = gate(images[mask[j]])
-                expert_output = expert(latent.detach())
+            for j in range(len(self.gates)):
+                self.gate_optimizers[j].zero_grad()
+                self.expert_optimizers[j].zero_grad()
+                recon, latent = self.gates[j](images[mask[j]])
+                expert_output = self.experts[j](latent.detach())
                 gate_loss = self.gate_loss(recon, images[mask[j]]).mean()
                 expert_loss = self.expert_loss(expert_output, targets[mask[j]])
                 gate_loss.backward()
                 expert_loss.backward()
-                gate_optimizer.step()
-                expert_optimizer.step()
+                self.gate_optimizers[j].step()
+                self.expert_optimizers[j].step()
                 
             loading_bar.set_postfix({
                 #"loss": f"{loss.item():.3f}", 
