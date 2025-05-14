@@ -20,7 +20,8 @@ class GatedExpert(nn.Module):
         super(GatedExpert, self).__init__()
         self.gates = []
         self.experts = []
-        self.optimizers = []
+        self.gate_optimizers = []
+        self.expert_optimizers = []
         self.in_out_shape = in_out_shape
         self.classes = classes
         self.depth = depth
@@ -50,8 +51,8 @@ class GatedExpert(nn.Module):
             output_features=self.classes
         )
         self.experts.append(expert)
-        params = list(gate.parameters()) + list(expert.parameters())
-        self.optimizers.append(torch.optim.Adam(params, lr=0.001))
+        self.gate_optimizers.append(torch.optim.Adam(gate.parameters(), lr=1e-3))
+        self.expert_optimizers.append(torch.optim.Adam(expert.parameters(), lr=1e-3))
     
     def new_task_was_recently_added(self):
         return self.time_since_new_task < self.hold_time_after_new_task and not self.task_aware
@@ -123,17 +124,19 @@ class GatedExpert(nn.Module):
             for j in range(len(self.gates)):
                 if torch.all(~mask[j]):
                     continue
-                self.optimizers[j].zero_grad()
-                recon, latent = self.gates[j](images[mask[j]])
-                expert_output = self.experts[j](latent)
-                gate_loss = self.gate_loss(recon, images[mask[j]]).mean()
+                self.gate_optimizers[j].zero_grad()
+                self.expert_optimizers[j].zero_grad()
+                recon, latent = self.gates[j](images[mask[j].view(-1, 1, 1, 1).expand(-1, 1, 28, 28)].view(-1, 1, 28, 28))
+                expert_output = self.experts[j](latent.detach())
+                gate_loss = self.gate_loss(recon, images[mask[j].view(-1, 1, 1, 1).expand(-1, 1, 28, 28)].view(-1, 1, 28, 28)).mean()
                 expert_loss = self.expert_loss(expert_output, targets[mask[j]])
-                loss = gate_loss + expert_loss
-                loss.backward()
-                self.optimizers[j].step()
+                gate_loss.backward()
+                expert_loss.backward()
+                self.gate_optimizers[j].step()
+                self.expert_optimizers[j].step()
                 
             loading_bar.set_postfix({
-                "loss": f"{loss.item():.3f}", 
+                #"loss": f"{loss.item():.3f}", 
                 "e": f"{expert_loss.item():.3f}", 
                 "g": f"{gate_loss.item():.3f}", 
                 "n": len(self.gates)})
