@@ -115,6 +115,8 @@ class GatedExpert(nn.Module):
             task_ids = task_ids.to(device)
             if task_ids.max() > len(self.gates) - 1:
                 self.new_task()
+                mask = self.mask_from_task_ids(task_ids)
+                print(mask)
 
             task_distribution[task_ids] += 1
             
