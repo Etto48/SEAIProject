@@ -31,7 +31,7 @@ class GatedExpert(nn.Module):
         self.temperature = 2.0
         self.error_threshold = 0.25
         self.selection_softmax = nn.Softmax(dim=0)
-        self.gate_loss = nn.L1Loss(reduction='none')
+        self.gate_loss = nn.MSELoss(reduction='none')
         self.expert_loss = nn.CrossEntropyLoss()
         self.task_aware = task_aware
         self.new_task()
@@ -87,8 +87,7 @@ class GatedExpert(nn.Module):
         for i, expert in enumerate(self.experts):
             if torch.all(~mask[i]):
                 continue
-            #expert_input = latent_representations[i][mask[i]]
-            expert_input = x[mask[i]]
+            expert_input = latent_representations[i][mask[i]]
             expert_output = expert(expert_input)
             logits[mask[i]] = expert_output
 

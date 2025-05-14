@@ -12,14 +12,7 @@ class ExpertMLP(nn.Module):
 		super(ExpertMLP, self).__init__()
 		
 		self.model = nn.Sequential(
-			nn.Conv2d(1, input_feature, kernel_size=3, padding=1, padding_mode='reflect'),
-			nn.ReLU(),
-			nn.MaxPool2d(kernel_size=2, stride=2),
-			nn.Conv2d(input_feature, input_feature, kernel_size=3, padding=1, padding_mode='reflect'),
-			nn.ReLU(),
-			nn.AdaptiveAvgPool2d((2, 2)),
-			nn.Flatten(),
-			nn.Linear(2*2*input_feature, hidden_features),
+			nn.Linear(input_feature, hidden_features),
 			nn.ReLU(),
 			nn.Linear(hidden_features, hidden_features),
 			nn.ReLU(),
