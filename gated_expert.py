@@ -115,11 +115,12 @@ class GatedExpert(nn.Module):
             task_ids = task_ids.to(device)
             if task_ids.max() > len(self.gates) - 1:
                 self.new_task()
-                
+
             self.train()
             mask = self.mask_from_task_ids(task_ids)
             logits, reconstructions, indices, min_reconstruction_errors, relevance_scores, mask = \
                 self(images, mask)
+            loss = torch.tensor(0.0)
             for i, (gate, expert, gate_optimizer, expert_optimizer) in enumerate(zip(self.gates, self.experts, self.gate_optimizers, self.expert_optimizers)):
                 gate_optimizer.zero_grad()
                 expert_optimizer.zero_grad()
@@ -127,8 +128,11 @@ class GatedExpert(nn.Module):
                 expert_loss = self.expert_loss(logits[mask[i]], targets[mask[i]])
                 gate_loss = gate_loss.mean()
 
-                loss = gate_loss + expert_loss
-                loss.backward()
+                loss += gate_loss
+                loss += expert_loss
+            
+            loss.backward()
+            for i, (gate, expert, gate_optimizer, expert_optimizer) in enumerate(zip(self.gates, self.experts, self.gate_optimizers, self.expert_optimizers)):
                 gate_optimizer.step()
                 expert_optimizer.step()
                 
