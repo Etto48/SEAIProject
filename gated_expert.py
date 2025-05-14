@@ -95,9 +95,9 @@ class GatedExpert(nn.Module):
 
     def mask_from_task_ids(self, task_ids: torch.Tensor):
         max_task_id = task_ids.max()
-        print(task_ids)
+        #print(task_ids)
         mask = torch.arange(max_task_id + 1).unsqueeze(1) == task_ids.unsqueeze(0)
-        print(mask)
+        #print(mask)
         return mask
 
     def fit(self, train_dataset: IterableDataset, test_dataset: Dataset | None = None):
