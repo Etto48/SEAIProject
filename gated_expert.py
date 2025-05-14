@@ -113,7 +113,9 @@ class GatedExpert(nn.Module):
             images = images.to(device)
             targets = targets.to(device)
             task_ids = task_ids.to(device)
-
+            if task_ids.max() > len(self.gates) - 1:
+                self.new_task()
+                
             self.train()
             mask = self.mask_from_task_ids(task_ids)
             logits, reconstructions, indices, min_reconstruction_errors, relevance_scores, mask = \
