@@ -168,12 +168,25 @@ class GatedExpert(nn.Module):
             plt.xticks(np.arange(10))
             plt.yticks(np.arange(10))
             plt.show()
+            # demo some images and autoencode them with all gates
+            for i in range(10):
+                plt.subplot(2, 5, i + 1)
+                plt.imshow(x[i].cpu().squeeze(), cmap='gray')
+                plt.axis('off')
+            plt.show()
+            for i in range(len(self.gates)):
+                plt.subplot(2, 5, i + 1)
+                recon, _ = self.gates[i](x[:10])
+                plt.imshow(recon[0].cpu().squeeze(), cmap='gray')
+                plt.axis('off')
+            plt.show()
 
 def main():
     train_dataset = SplitMNIST(task_duration=100000)
     test_dataset = datasets.MNIST(root='data', train=False, download=True, transform=train_dataset.transform, target_transform=torch.tensor)
     model = GatedExpert()
     model.fit(train_dataset, test_dataset)
+
     
 if __name__ == "__main__":
     main()
