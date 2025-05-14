@@ -32,7 +32,7 @@ class GatedExpert(nn.Module):
         self.temperature = 2.0
         self.error_threshold = 0.25
         self.selection_softmax = nn.Softmax(dim=0)
-        self.gate_loss = nn.L1Loss()
+        self.gate_loss = nn.L1Loss(reduction='none')
         self.expert_loss = nn.CrossEntropyLoss()
         self.task_aware = task_aware
         self.new_task()
@@ -123,7 +123,7 @@ class GatedExpert(nn.Module):
                 expert_optimizer.zero_grad()
                 recon, latent = gate(images[mask[j]])
                 expert_output = expert(latent.detach())
-                gate_loss = self.gate_loss(recon, images[mask[j]])
+                gate_loss = self.gate_loss(recon, images[mask[j]]).mean()
                 expert_loss = self.expert_loss(expert_output, targets[mask[j]])
                 gate_loss.backward()
                 expert_loss.backward()
