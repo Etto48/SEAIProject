@@ -138,7 +138,11 @@ class GatedExpert(nn.Module):
                 if torch.any(mask[i]):
                     gate_optimizer.step()
                     expert_optimzer.step()
-            loading_bar.set_postfix({"loss": loss.item(), "e": expert_loss.item(), "g": gate_loss.item(), "n": len(self.gates)})
+            loading_bar.set_postfix({
+                "loss": f"{loss.item():.3f}", 
+                "e": f"{expert_loss.item():.3f}", 
+                "g": f"{gate_loss.item():.3f}", 
+                "n": len(self.gates)})
         if test_dataset is not None:
             self.eval()
             correct = 0
