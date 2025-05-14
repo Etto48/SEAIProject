@@ -35,8 +35,6 @@ class GatedExpert(nn.Module):
         self.gate_loss = nn.MSELoss(reduction='none')
         self.expert_loss = nn.CrossEntropyLoss()
         self.task_aware = task_aware
-        for _ in range(5):
-            self.new_task()
 
     def new_task(self):
         self.time_since_new_task = 0
