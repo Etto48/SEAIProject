@@ -35,7 +35,8 @@ class GatedExpert(nn.Module):
         self.gate_loss = nn.MSELoss(reduction='none')
         self.expert_loss = nn.CrossEntropyLoss()
         self.task_aware = task_aware
-        self.new_task()
+        for _ in range(5):
+            self.new_task()
 
     def new_task(self):
         self.time_since_new_task = 0
@@ -98,7 +99,7 @@ class GatedExpert(nn.Module):
         return logits, reconstructions, indices, min_reconstruction_errors, relevance_scores, mask
 
     def mask_from_task_ids(self, task_ids: torch.Tensor):
-        max_task_id = task_ids.max()
+        max_task_id = max(task_ids.max(), len(self.gates) - 1)
         mask = torch.arange(max_task_id + 1).unsqueeze(1) == task_ids.unsqueeze(0)
         return mask
 
