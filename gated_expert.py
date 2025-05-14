@@ -32,7 +32,7 @@ class GatedExpert(nn.Module):
         self.temperature = 2.0
         self.error_threshold = 0.25
         self.selection_softmax = nn.Softmax(dim=0)
-        self.gate_loss = nn.MSELoss(reduction='none')
+        self.gate_loss = nn.L1Loss(reduction='none')
         self.expert_loss = nn.CrossEntropyLoss()
         self.task_aware = task_aware
         self.new_task()
@@ -61,16 +61,19 @@ class GatedExpert(nn.Module):
     def forward(self, x: torch.Tensor, mask: torch.Tensor | None = None):
         # x (B, C, H, W)
         latent_representations = []
+        reconstructions = []
         reconstruction_errors = []
         for gate in self.gates:
             recon, latent = gate(x)
             latent_representations.append(latent)
+            reconstructions.append(recon)
             error = self.gate_loss(recon, x)
             error = error.mean(dim=(1, 2, 3))
             reconstruction_errors.append(error)
 
         # reconstruction_errors (N_gates, B)
         reconstruction_errors = torch.stack(reconstruction_errors, dim=0)
+        reconstructions = torch.stack(reconstructions, dim=0)
         # latent_representations (N_gates, B, latent_dim)
         latent_representations = torch.stack(latent_representations, dim=0)
         relevance_logits = -reconstruction_errors/self.temperature
@@ -92,7 +95,7 @@ class GatedExpert(nn.Module):
             expert_output = expert(expert_input)
             logits[mask[i]] = expert_output
 
-        return logits, indices, min_reconstruction_errors, relevance_scores, mask
+        return logits, reconstructions, indices, min_reconstruction_errors, relevance_scores, mask
 
     def mask_from_task_ids(self, task_ids: torch.Tensor):
         max_task_id = task_ids.max()
@@ -112,32 +115,21 @@ class GatedExpert(nn.Module):
             task_ids = task_ids.to(device)
 
             self.train()
-            self.zero_grad()
-            if self.task_aware:
-                if len(self.gates) <= task_ids.max():
-                    self.new_task()
-                mask = self.mask_from_task_ids(task_ids)
-            else:
-                mask = None
-            logits, indices, min_reconstruction_errors, relevance_scores, mask = self(images, mask)
-            if not self.task_aware and torch.any(min_reconstruction_errors > self.error_threshold) and \
-                not self.new_task_was_recently_added():
-                self.new_task()
-                mask[indices][min_reconstruction_errors > self.error_threshold] = False
-                mask = torch.cat([mask, torch.zeros((1,images.shape[0]), dtype=torch.bool)])
-                mask[-1][min_reconstruction_errors > self.error_threshold] = True
-                logits, indices, min_reconstruction_errors, relevance_scores, mask = self(images, mask)
-            elif not self.task_aware:
-                self.time_since_new_task += 1
-            expert_loss = self.expert_loss(logits, targets)
-            gate_loss = min_reconstruction_errors.sum()
-            loss = expert_loss + gate_loss
-            loss.backward()
-            for i, (gate_optimizer, expert_optimzer) \
-                in enumerate(zip(self.gate_optimizers, self.expert_optimizers)):
-                if torch.any(mask[i]):
-                    gate_optimizer.step()
-                    expert_optimzer.step()
+            mask = self.mask_from_task_ids(task_ids)
+            logits, reconstructions, indices, min_reconstruction_errors, relevance_scores, mask = \
+                self(images, mask)
+            for i, (gate, expert, gate_optimizer, expert_optimizer) in enumerate(zip(self.gates, self.experts, self.gate_optimizers, self.expert_optimizers)):
+                gate_optimizer.zero_grad()
+                expert_optimizer.zero_grad()
+                gate_loss = self.gate_loss(reconstructions[i][mask[i]], images[mask[i]])
+                expert_loss = self.expert_loss(logits[mask[i]], targets[mask[i]])
+                gate_loss = gate_loss.mean()
+
+                loss = gate_loss + expert_loss
+                loss.backward()
+                gate_optimizer.step()
+                expert_optimizer.step()
+                
             loading_bar.set_postfix({
                 "loss": f"{loss.item():.3f}", 
                 "e": f"{expert_loss.item():.3f}", 
@@ -153,7 +145,7 @@ class GatedExpert(nn.Module):
                 for x, y in loading_bar:
                     x = x.to(device)
                     y = y.to(device)
-                    logits, indices, min_reconstruction_errors, relevance_scores, mask = self(x)
+                    logits, reconstructions, indices, min_reconstruction_errors, relevance_scores, mask = self(x)
                     outputs = logits
                     total += y.shape[0]
                     correct += (outputs.argmax(dim=1) == y).sum().item()
