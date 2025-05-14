@@ -38,14 +38,14 @@ class GatedExpert(nn.Module):
 
     def new_task(self):
         self.time_since_new_task = 0
-        gate = copy.deepcopy(self.gates[-1]) if len(self.gates) > 0 else GateAutoencoder(
+        gate = GateAutoencoder(
             in_out_shape=self.in_out_shape,
             depth=self.depth,
             hidden_dim=self.hidden_dim,
             latent_dim=self.latent_dim
         )
         self.gates.append(gate)
-        expert = copy.deepcopy(self.experts[-1]) if len(self.experts) > 0 else ExpertMLP(
+        expert = ExpertMLP(
             input_feature=self.latent_dim,
             hidden_features=self.hidden_dim,
             output_features=self.classes
@@ -63,7 +63,7 @@ class GatedExpert(nn.Module):
         reconstruction_errors = []
         for gate in self.gates:
             recon, latent = gate(x)
-            latent_representations.append(latent.detach())
+            latent_representations.append(latent)
             error = self.gate_loss(recon, x)
             error = error.mean(dim=(1, 2, 3))
             reconstruction_errors.append(error)
