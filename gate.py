@@ -41,7 +41,7 @@ class GateAutoencoder(nn.Module):
             self.decoder.append(nn.ReLU())
             self.decoder.append(nn.Upsample(scale_factor=2, mode='bilinear'))
         self.decoder.append(nn.Conv2d(hidden_dim, self.input_features, kernel_size=3, padding=1, padding_mode='reflect'))
-        self.decoder.append(nn.Tanh())
+        self.decoder.append(nn.Sigmoid())
 
     def forward(self, x: torch.Tensor):
         latent = self.encoder(x)
