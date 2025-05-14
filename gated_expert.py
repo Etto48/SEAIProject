@@ -63,7 +63,7 @@ class GatedExpert(nn.Module):
         reconstruction_errors = []
         for gate in self.gates:
             recon, latent = gate(x)
-            latent_representations.append(latent)
+            latent_representations.append(latent.detach())
             error = self.gate_loss(recon, x)
             error = error.mean(dim=(1, 2, 3))
             reconstruction_errors.append(error)
