@@ -51,8 +51,8 @@ class GatedExpert(nn.Module):
             output_features=self.classes
         )
         self.experts.append(expert)
-        self.gate_optimizers.append(torch.optim.Adam(gate.parameters(), lr=1e-3))
-        self.expert_optimizers.append(torch.optim.Adam(expert.parameters(), lr=1e-3))
+        self.gate_optimizers.append(torch.optim.Adam(gate.parameters(), lr=1e-2))
+        self.expert_optimizers.append(torch.optim.Adam(expert.parameters(), lr=1e-2))
     
     def new_task_was_recently_added(self):
         return self.time_since_new_task < self.hold_time_after_new_task and not self.task_aware
@@ -126,9 +126,9 @@ class GatedExpert(nn.Module):
                     continue
                 self.gate_optimizers[j].zero_grad()
                 self.expert_optimizers[j].zero_grad()
-                recon, latent = self.gates[j](images[mask[j].view(-1, 1, 1, 1).expand(-1, 1, 28, 28)].view(-1, 1, 28, 28))
+                recon, latent = self.gates[j](images[mask[j]])
                 expert_output = self.experts[j](latent.detach())
-                gate_loss = self.gate_loss(recon, images[mask[j].view(-1, 1, 1, 1).expand(-1, 1, 28, 28)].view(-1, 1, 28, 28)).mean()
+                gate_loss = self.gate_loss(recon, images[mask[j]]).mean()
                 expert_loss = self.expert_loss(expert_output, targets[mask[j]])
                 gate_loss.backward()
                 expert_loss.backward()
