@@ -121,8 +121,9 @@ class GatedExpert(nn.Module):
 
             self.train()
             mask = self.mask_from_task_ids(task_ids)
-            print(mask)
             for j in range(len(self.gates)):
+                if torch.all(~mask[j]):
+                    continue
                 self.gate_optimizers[j].zero_grad()
                 self.expert_optimizers[j].zero_grad()
                 recon, latent = self.gates[j](images[mask[j]])
