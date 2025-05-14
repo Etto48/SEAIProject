@@ -161,7 +161,12 @@ class GatedExpert(nn.Module):
             plt.yticks(np.arange(10))
             plt.show()
             # demo some images and autoencode them with all gates
-            original_images = [test_dataset[i] for i in range(10)]
+            original_images = []
+            while len(original_images) < 10:
+                for i in range(len(test_dataset)):
+                    img, label = test_dataset[i]
+                    if label == len(original_images):
+                        original_images.append((img, label))
             original_images = torch.stack([img for img, _ in original_images], dim=0).to(device)
             reconstructions = []
             for gate in self.gates:
