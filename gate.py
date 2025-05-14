@@ -13,6 +13,7 @@ class GateAutoencoder(nn.Module):
         self.latent_dim = latent_dim
         self.encoder = nn.Sequential()
         self.decoder = nn.Sequential()
+        latent_width, latent_height = in_out_shape[1] // (2**depth), in_out_shape[2] // (2**depth)
         for i in range(depth):
             if i == 0:
                 in_channels = self.input_features
@@ -21,14 +22,10 @@ class GateAutoencoder(nn.Module):
             out_channels = hidden_dim
             self.encoder.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, padding_mode='reflect'))
             self.encoder.append(nn.ReLU())
-            if i != depth - 1:
-                self.encoder.append(nn.MaxPool2d(kernel_size=2, stride=2))
-        self.encoder.append(nn.AdaptiveAvgPool2d((2, 2)))
+            self.encoder.append(nn.MaxPool2d(kernel_size=2, stride=2))
         self.encoder.append(nn.Flatten())
-        self.encoder.append(nn.Linear(2*2*hidden_dim, latent_dim))
-        self.encoder.append(nn.Tanh())
-        
-        latent_width, latent_height = in_out_shape[1] // (2**depth), in_out_shape[2] // (2**depth)
+        self.encoder.append(nn.Linear(hidden_dim * latent_width * latent_height, latent_dim))
+        self.encoder.append(nn.Tanh())        
 
         self.decoder.append(nn.Linear(latent_dim, hidden_dim * latent_width * latent_height))
         self.decoder.append(nn.ReLU())
