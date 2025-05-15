@@ -192,7 +192,7 @@ class GatedExpert(nn.Module):
             plt.show()
 
 def main():
-    train_dataset = SplitCIFAR10(task_duration=10000)
+    train_dataset = SplitCIFAR10(task_duration=100000)
     #test_dataset = datasets.MNIST(root='data', train=False, download=True, transform=train_dataset.transform, target_transform=torch.tensor)
     test_dataset = datasets.CIFAR10(root='data', train=False, download=True, transform=train_dataset.transform)
     model = GatedExpert()
