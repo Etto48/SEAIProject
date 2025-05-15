@@ -35,7 +35,7 @@ class GatedExpert(nn.Module):
         self.temperature = 2.0
         self.error_threshold = 0.25
         self.selection_softmax = nn.Softmax(dim=0)
-        self.gate_loss = nn.L1Loss(reduction='none')
+        self.gate_loss = nn.BCELoss(reduction='none')
         self.expert_loss = nn.CrossEntropyLoss()
         self.task_aware = task_aware
 
