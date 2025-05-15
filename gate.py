@@ -37,7 +37,7 @@ class GateAutoencoder(nn.Module):
                 in_features = hidden_dim
                 out_features = hidden_dim
             self.encoder.append(nn.Linear(in_features, out_features))
-            self.encoder.append(nn.BatchNorm1d(in_features))
+            self.encoder.append(nn.BatchNorm1d(out_features))
             if i != ff_depth - 1:
                 self.encoder.append(nn.ReLU())
             else:
