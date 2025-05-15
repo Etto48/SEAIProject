@@ -17,7 +17,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.set_default_device(device)
 
 class GatedExpert(nn.Module):
-    def __init__(self, in_out_shape=(3, 32, 32), classes=10, depth=3, ff_depth=1, expert_depth=3, hidden_dim=128, latent_dim=128, task_aware=True):
+    def __init__(self, in_out_shape=(3, 32, 32), classes=10, depth=3, ff_depth=3, expert_depth=3, hidden_dim=128, latent_dim=128, task_aware=True):
         super(GatedExpert, self).__init__()
         self.gates = nn.ModuleList()
         self.experts = nn.ModuleList()
@@ -35,7 +35,7 @@ class GatedExpert(nn.Module):
         self.temperature = 2.0
         self.error_threshold = 0.25
         self.selection_softmax = nn.Softmax(dim=0)
-        self.gate_loss = nn.BCELoss(reduction='none')
+        self.gate_loss = nn.L1Loss(reduction='none')
         self.expert_loss = nn.CrossEntropyLoss()
         self.task_aware = task_aware
 
