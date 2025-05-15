@@ -22,6 +22,7 @@ class GateAutoencoder(nn.Module):
                 in_channels = hidden_dim
             out_channels = hidden_dim
             self.encoder.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, padding_mode='reflect'))
+            self.encoder.append(nn.BatchNorm2d(in_channels))
             self.encoder.append(nn.ReLU())
             self.encoder.append(nn.MaxPool2d(kernel_size=2, stride=2))
         self.encoder.append(nn.Flatten())
@@ -36,6 +37,7 @@ class GateAutoencoder(nn.Module):
                 in_features = hidden_dim
                 out_features = hidden_dim
             self.encoder.append(nn.Linear(in_features, out_features))
+            self.encoder.append(nn.BatchNorm1d(in_features))
             if i != ff_depth - 1:
                 self.encoder.append(nn.ReLU())
             else:
@@ -52,6 +54,7 @@ class GateAutoencoder(nn.Module):
                 in_features = hidden_dim
                 out_features = hidden_dim
             self.decoder.append(nn.Linear(in_features, out_features))
+            self.decoder.append(nn.BatchNorm1d(in_features))
             self.decoder.append(nn.ReLU())
         self.decoder.append(nn.Unflatten(1, (hidden_dim, latent_width, latent_height)))
 
@@ -59,6 +62,7 @@ class GateAutoencoder(nn.Module):
             out_channels = hidden_dim
             in_channels = hidden_dim
             self.decoder.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, padding_mode='reflect'))
+            self.decoder.append(nn.BatchNorm2d(in_channels))
             self.decoder.append(nn.ReLU())
             self.decoder.append(nn.Upsample(scale_factor=2, mode='bilinear'))
         self.decoder.append(nn.Conv2d(hidden_dim, self.input_features, kernel_size=3, padding=1, padding_mode='reflect'))
