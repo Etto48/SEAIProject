@@ -15,10 +15,10 @@ class ExpertMLP(nn.Module):
 		for i in range(depth):
 			in_features = input_feature if i == 0 else hidden_features
 			out_features = hidden_features
-			nn.Linear(in_features, out_features),
-			nn.BatchNorm1d(out_features),
-			nn.ReLU(),
-		nn.Linear(hidden_features, output_features)
+			self.model.append(nn.Linear(in_features, out_features))
+			self.model.append(nn.BatchNorm1d(out_features))
+			self.model.append(nn.ReLU())
+		self.model.append(nn.Linear(hidden_features, output_features))
 
 	def forward(self, x: torch.Tensor) -> torch.Tensor:
 		return self.model(x)
