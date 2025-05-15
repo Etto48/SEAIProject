@@ -129,11 +129,13 @@ class GatedExpert(nn.Module):
                 self.gate_optimizers[j].zero_grad()
                 self.expert_optimizers[j].zero_grad()
                 recon, latent = self.gates[j](images[mask[j]])
-                expert_output = self.experts[j](latent.detach())
+                expert_output = self.experts[j](latent)
                 gate_loss = self.gate_loss(recon, images[mask[j]]).mean()
                 expert_loss = self.expert_loss(expert_output, targets[mask[j]])
-                gate_loss.backward()
-                expert_loss.backward()
+                #gate_loss.backward()
+                #expert_loss.backward()
+                loss = gate_loss + expert_loss
+                loss.backward()
                 self.gate_optimizers[j].step()
                 self.expert_optimizers[j].step()
                 
