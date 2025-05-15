@@ -17,7 +17,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.set_default_device(device)
 
 class GatedExpert(nn.Module):
-    def __init__(self, in_out_shape=(3, 32, 32), classes=10, depth=3, ff_depth=5, hidden_dim=512, latent_dim=512, task_aware=True):
+    def __init__(self, in_out_shape=(3, 32, 32), classes=10, depth=2, ff_depth=5, hidden_dim=256, latent_dim=256, task_aware=True):
         super(GatedExpert, self).__init__()
         self.gates = nn.ModuleList()
         self.experts = nn.ModuleList()
@@ -55,8 +55,8 @@ class GatedExpert(nn.Module):
             output_features=self.classes
         )
         self.experts.append(expert)
-        self.gate_optimizers.append(torch.optim.Adam(gate.parameters(), lr=1e-5))
-        self.expert_optimizers.append(torch.optim.Adam(expert.parameters(), lr=1e-5))
+        self.gate_optimizers.append(torch.optim.Adam(gate.parameters(), lr=1e-3))
+        self.expert_optimizers.append(torch.optim.Adam(expert.parameters(), lr=1e-3))
     
     def new_task_was_recently_added(self):
         return self.time_since_new_task < self.hold_time_after_new_task and not self.task_aware
