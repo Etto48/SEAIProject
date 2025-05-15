@@ -15,10 +15,10 @@ class GateAutoencoder(nn.Module):
         self.encoder = nn.Sequential()
         self.decoder = nn.Sequential()
         latent_width, latent_height = in_out_shape[1] // (2**depth), in_out_shape[2] // (2**depth)
-        self.encoder.append(nn.Conv2d(self.input_features, hidden_dim, kernel_size=5, padding=2, padding_mode='reflect'))
+        self.encoder.append(nn.Conv2d(self.input_features, hidden_dim, kernel_size=3, padding=1, padding_mode='reflect'))
         for i in range(depth):
             for j in range(conv_block_depth):
-                self.encoder.append(nn.Conv2d(hidden_dim, hidden_dim, kernel_size=5, padding=2, padding_mode='reflect'))
+                self.encoder.append(nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding=1, padding_mode='reflect'))
                 self.encoder.append(nn.BatchNorm2d(hidden_dim))
                 self.encoder.append(nn.ReLU())
             self.encoder.append(nn.MaxPool2d(kernel_size=2, stride=2))
@@ -58,10 +58,10 @@ class GateAutoencoder(nn.Module):
         for i in range(depth):
             self.decoder.append(nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size=2, stride=2))
             for j in range(conv_block_depth):
-                self.decoder.append(nn.Conv2d(hidden_dim, hidden_dim, kernel_size=5, padding=2, padding_mode='reflect'))
+                self.decoder.append(nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding=1, padding_mode='reflect'))
                 self.decoder.append(nn.BatchNorm2d(hidden_dim))
                 self.decoder.append(nn.ReLU())
-        self.decoder.append(nn.Conv2d(hidden_dim, self.input_features, kernel_size=5, padding=2, padding_mode='reflect'))
+        self.decoder.append(nn.Conv2d(hidden_dim, self.input_features, kernel_size=3, padding=1, padding_mode='reflect'))
         self.decoder.append(nn.Sigmoid())
 
     def forward(self, x: torch.Tensor):
