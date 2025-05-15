@@ -107,9 +107,9 @@ class GatedExpert(nn.Module):
         return mask
 
     def fit(self, train_dataset: IterableDataset, test_dataset: Dataset | None = None):
-        train_loader = DataLoader(train_dataset, batch_size=32)
+        train_loader = DataLoader(train_dataset, batch_size=16)
         if test_dataset is not None:
-            test_loader = DataLoader(test_dataset, batch_size=32, generator=torch.Generator(device=device))
+            test_loader = DataLoader(test_dataset, batch_size=16, generator=torch.Generator(device=device))
 
         loading_bar = tqdm(train_loader, total=len(train_loader), desc="Training", unit="batch")
         for i, batch in enumerate(loading_bar):
