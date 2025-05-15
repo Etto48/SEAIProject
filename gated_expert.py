@@ -11,12 +11,13 @@ import numpy as np
 from expert import ExpertMLP
 from gate import GateAutoencoder
 from split_MNIST import SplitMNIST
+from split_CIFAR10 import SplitCIFAR10
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.set_default_device(device)
 
 class GatedExpert(nn.Module):
-    def __init__(self, in_out_shape=(1, 28, 28), classes=10, depth=2, ff_depth=3, hidden_dim=256, latent_dim=256, task_aware=True):
+    def __init__(self, in_out_shape=(3, 32, 32), classes=10, depth=2, ff_depth=3, hidden_dim=256, latent_dim=256, task_aware=True):
         super(GatedExpert, self).__init__()
         self.gates = nn.ModuleList()
         self.experts = nn.ModuleList()
@@ -190,8 +191,9 @@ class GatedExpert(nn.Module):
             plt.show()
 
 def main():
-    train_dataset = SplitMNIST(task_duration=10000)
-    test_dataset = datasets.MNIST(root='data', train=False, download=True, transform=train_dataset.transform, target_transform=torch.tensor)
+    train_dataset = SplitCIFAR10()
+    #test_dataset = datasets.MNIST(root='data', train=False, download=True, transform=train_dataset.transform, target_transform=torch.tensor)
+    test_dataset = datasets.CIFAR10(root='data', train=False, download=True, transform=train_dataset.transform)
     model = GatedExpert()
     model.fit(train_dataset, test_dataset)
 

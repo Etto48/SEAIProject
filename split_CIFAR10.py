@@ -16,7 +16,8 @@ class SplitCIFAR10(IterableDataset):
 
     def create_buckets(self):
         # Create buckets of samples with classes_per_split classes in each bucket
-        classes = np.unique(self.dataset.targets.numpy())
+        targets = np.array(self.dataset.targets)
+        classes = np.unique(targets)
         # check if classes_per_split is a divisor of the number of classes
         if len(classes) % self.classes_per_split != 0:
             raise ValueError(f"Number of classes {len(classes)} is not divisible by classes_per_split {self.classes_per_split}")
@@ -26,7 +27,7 @@ class SplitCIFAR10(IterableDataset):
             start = i * self.classes_per_split
             end = start + self.classes_per_split
             bucket_classes = classes[start:end]
-            bucket_indices = np.isin(self.dataset.targets.numpy(), bucket_classes)
+            bucket_indices = np.isin(targets, bucket_classes)
             buckets.append(np.where(bucket_indices)[0])
         return buckets
     
