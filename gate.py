@@ -22,12 +22,11 @@ class GateAutoencoder(nn.Module):
         for i in range(ff_depth):
             if i == 0:
                 in_features = hidden_dim * latent_width * latent_height
-                out_features = hidden_dim
-            elif i == ff_depth - 1:
-                in_features = hidden_dim
-                out_features = latent_dim
             else:
                 in_features = hidden_dim
+            if i == ff_depth - 1:
+                out_features = latent_dim
+            else:
                 out_features = hidden_dim
             self.encoder.append(nn.Linear(in_features, out_features))
             self.encoder.append(nn.BatchNorm1d(out_features))
@@ -39,12 +38,11 @@ class GateAutoencoder(nn.Module):
         for i in range(ff_depth):
             if i == 0:
                 in_features = latent_dim
-                out_features = hidden_dim
-            elif i == ff_depth - 1:
-                in_features = hidden_dim
-                out_features = hidden_dim * latent_width * latent_height
             else:
                 in_features = hidden_dim
+            if i == ff_depth - 1:
+                out_features = hidden_dim * latent_width * latent_height
+            else:
                 out_features = hidden_dim
             self.decoder.append(nn.Linear(in_features, out_features))
             self.decoder.append(nn.BatchNorm1d(out_features))
