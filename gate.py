@@ -61,10 +61,12 @@ class GateAutoencoder(nn.Module):
         for i in range(depth):
             out_channels = hidden_dim
             in_channels = hidden_dim
-            self.decoder.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, padding_mode='reflect'))
+            self.decoder.append(nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2))
             self.decoder.append(nn.BatchNorm2d(out_channels))
             self.decoder.append(nn.ReLU())
-            self.decoder.append(nn.Upsample(scale_factor=2, mode='bilinear'))
+            self.decoder.append(nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, padding_mode='reflect'))
+            self.decoder.append(nn.BatchNorm2d(out_channels))
+            self.decoder.append(nn.ReLU())
         self.decoder.append(nn.Conv2d(hidden_dim, self.input_features, kernel_size=3, padding=1, padding_mode='reflect'))
         self.decoder.append(nn.Sigmoid())
 
