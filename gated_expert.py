@@ -17,7 +17,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.set_default_device(device)
 
 class GatedExpert(nn.Module):
-    def __init__(self, in_out_shape=(3, 32, 32), classes=10, depth=2, ff_depth=3, expert_depth=3, hidden_dim=64, latent_dim=1024, task_aware=True):
+    def __init__(self, in_out_shape=(3, 32, 32), classes=10, depth=1, ff_depth=3, expert_depth=3, hidden_dim=64, latent_dim=1024, task_aware=True):
         super(GatedExpert, self).__init__()
         self.gates = nn.ModuleList()
         self.experts = nn.ModuleList()
