@@ -183,10 +183,10 @@ class GatedExpert(nn.Module):
             reconstructions = reconstructions.detach().cpu().numpy()
             fig, axes = plt.subplots(len(self.gates)+1, 10)
             for i in range(10):
-                axes[0, i].imshow(original_images[i].permute(1, 2, 0), cmap='gray')
+                axes[0, i].imshow(original_images[i].transpose(1, 2, 0), cmap='gray')
                 axes[0, i].axis('off')
                 for j in range(len(self.gates)):
-                    axes[j + 1, i].imshow(reconstructions[j, i].permute(1, 2, 0), cmap='gray')
+                    axes[j + 1, i].imshow(reconstructions[j, i].transpose(1, 2, 0), cmap='gray')
                     axes[j + 1, i].axis('off')
             plt.show()
 
