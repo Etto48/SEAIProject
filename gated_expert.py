@@ -55,8 +55,8 @@ class GatedExpert(nn.Module):
             output_features=self.classes
         )
         self.experts.append(expert)
-        self.gate_optimizers.append(torch.optim.Adam(gate.parameters(), lr=1e-4))
-        self.expert_optimizers.append(torch.optim.Adam(expert.parameters(), lr=1e-4))
+        self.gate_optimizers.append(torch.optim.Adam(gate.parameters(), lr=1e-5))
+        self.expert_optimizers.append(torch.optim.Adam(expert.parameters(), lr=1e-5))
     
     def new_task_was_recently_added(self):
         return self.time_since_new_task < self.hold_time_after_new_task and not self.task_aware
