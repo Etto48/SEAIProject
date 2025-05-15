@@ -52,7 +52,7 @@ class GateAutoencoder(nn.Module):
         self.decoder.append(nn.Unflatten(1, (hidden_dim, latent_width, latent_height)))
 
         for i in range(depth):
-            self.decoder.append(nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size=4, padding=1, stride=2, padding_mode='reflect'))
+            self.decoder.append(nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size=4, padding=1, stride=2))
         self.decoder.append(nn.Conv2d(hidden_dim, self.input_features, kernel_size=3, padding=1, padding_mode='reflect'))
         self.decoder.append(nn.Sigmoid())
 
