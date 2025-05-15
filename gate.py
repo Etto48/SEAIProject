@@ -55,7 +55,7 @@ class GateAutoencoder(nn.Module):
             self.decoder.append(nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size=4, padding=1, stride=2))
             #self.decoder.append(nn.BatchNorm2d(hidden_dim))
             self.decoder.append(nn.ReLU())
-        self.decoder.append(nn.Conv2d(hidden_dim, self.input_features, kernel_size=1, padding=1, padding_mode='reflect'))
+        self.decoder.append(nn.Conv2d(hidden_dim, self.input_features, kernel_size=1))
         self.decoder.append(nn.Sigmoid())
 
     def forward(self, x: torch.Tensor):
