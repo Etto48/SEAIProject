@@ -16,7 +16,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.set_default_device(device)
 
 class GatedExpert(nn.Module):
-    def __init__(self, in_out_shape=(1, 28, 28), classes=10, depth=2, hidden_dim=128, latent_dim=128, task_aware=True):
+    def __init__(self, in_out_shape=(1, 28, 28), classes=10, depth=2, ff_depth=3, hidden_dim=256, latent_dim=256, task_aware=True):
         super(GatedExpert, self).__init__()
         self.gates = []
         self.experts = []
@@ -25,6 +25,7 @@ class GatedExpert(nn.Module):
         self.in_out_shape = in_out_shape
         self.classes = classes
         self.depth = depth
+        self.ff_depth = ff_depth
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
         self.hold_time_after_new_task = 10
@@ -41,6 +42,7 @@ class GatedExpert(nn.Module):
         gate = GateAutoencoder(
             in_out_shape=self.in_out_shape,
             depth=self.depth,
+            ff_depth=self.ff_depth,
             hidden_dim=self.hidden_dim,
             latent_dim=self.latent_dim
         )
