@@ -13,8 +13,10 @@ class ExpertMLP(nn.Module):
 		
 		self.model = nn.Sequential(
 			nn.Linear(input_feature, hidden_features),
+			nn.BatchNorm1d(hidden_features),
 			nn.ReLU(),
 			nn.Linear(hidden_features, hidden_features),
+			nn.BatchNorm1d(hidden_features),
 			nn.ReLU(),
 			nn.Linear(hidden_features, output_features)
 		)
