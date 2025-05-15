@@ -18,7 +18,7 @@ class GateAutoencoder(nn.Module):
         self.encoder.append(nn.Conv2d(self.input_features, hidden_dim, kernel_size=3, padding=1, padding_mode='reflect'))
         for i in range(depth):
             self.encoder.append(nn.Conv2d(hidden_dim, hidden_dim, kernel_size=4, padding=1, stride=2, padding_mode='reflect'))
-            self.encoder.append(nn.BatchNorm2d(hidden_dim))
+            #self.encoder.append(nn.BatchNorm2d(hidden_dim))
             self.encoder.append(nn.ReLU())
         self.encoder.append(nn.Flatten())
         for i in range(ff_depth):
@@ -31,7 +31,7 @@ class GateAutoencoder(nn.Module):
             else:
                 out_features = hidden_dim
             self.encoder.append(nn.Linear(in_features, out_features))
-            self.encoder.append(nn.BatchNorm1d(out_features))
+            #self.encoder.append(nn.BatchNorm1d(out_features))
             if i != ff_depth - 1:
                 self.encoder.append(nn.ReLU())
             else:
@@ -47,15 +47,15 @@ class GateAutoencoder(nn.Module):
             else:
                 out_features = hidden_dim
             self.decoder.append(nn.Linear(in_features, out_features))
-            self.decoder.append(nn.BatchNorm1d(out_features))
+            #self.decoder.append(nn.BatchNorm1d(out_features))
             self.decoder.append(nn.ReLU())
         self.decoder.append(nn.Unflatten(1, (hidden_dim, latent_width, latent_height)))
 
         for i in range(depth):
             self.decoder.append(nn.ConvTranspose2d(hidden_dim, hidden_dim, kernel_size=4, padding=1, stride=2))
-            self.decoder.append(nn.BatchNorm2d(hidden_dim))
+            #self.decoder.append(nn.BatchNorm2d(hidden_dim))
             self.decoder.append(nn.ReLU())
-        self.decoder.append(nn.Conv2d(hidden_dim, self.input_features, kernel_size=3, padding=1, padding_mode='reflect'))
+        self.decoder.append(nn.Conv2d(hidden_dim, self.input_features, kernel_size=1, padding=1, padding_mode='reflect'))
         self.decoder.append(nn.Sigmoid())
 
     def forward(self, x: torch.Tensor):
