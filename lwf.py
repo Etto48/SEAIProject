@@ -2,6 +2,10 @@ import torch
 import torch.nn as nn
 import torchvision
 from torch.utils.data import IterableDataset, Dataset, DataLoader
+from tqdm.auto import tqdm
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+torch.set_default_device(device)
 
 class LWFClassifier(nn.Module):
     def __init__(self, in_out_shape=(3, 32, 32), classes=10):
@@ -23,7 +27,10 @@ class LWFClassifier(nn.Module):
         self.error_window = []
         self.error_window_sum = 0
 
-    def new_error(self, error: float):
+        self.temperature = 2
+        self.old_loss_weight = 1
+
+    def new_error(self, error: float) -> tuple[float, float]:
         if len(self.error_window) >= self.error_window_max_len:
             self.error_window_sum -= self.error_window.pop(0)
         self.error_window.append(error)
@@ -43,14 +50,46 @@ class LWFClassifier(nn.Module):
 
     def forward(self, x: torch.Tensor):
         x = self.feature_extractor(x)
+        if self.old_classifier_head is not None:
+            x_old = self.old_classifier_head(x)
+        else:
+            x_old = None
         x = self.classifier_head(x)
-        return x
+        return x, x_old
 
     def fit(self, train_dataset: IterableDataset, test_dataset: Dataset | None = None):
         train_loader = DataLoader(train_dataset, batch_size=32)
         if test_dataset is not None:
             test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
         
+        loading_bar = tqdm(train_loader, desc="Training", unit="batch")
+        mean, std = 0, 0
+        for batch in loading_bar:
+            img, label, task = batch
+            img = img.to(device)
+            label = label.to(device)
+            task = task.to(device)
+
+            self.optimizer.zero_grad()
+            output, old_output = self(img)
+            if old_output is not None:
+                old_output /= self.temperature
+            
+            loss_new: torch.Tensor = self.loss(output, label)
+            if std > 0 and loss_new.item() > mean + self.error_threshold * std:
+                self.new_task(self.classes)
+            mean, std = self.new_error(loss_new.item())
+            
+
+            loss_old = torch.zeros_like(loss_new)
+            if old_output is not None:
+                loss_old = self.loss(old_output, label)
+                loss_old = self.old_loss_weight * loss_old
+            loss: torch.Tensor = loss_new + loss_old
+            loss.backward()
+            self.optimizer.step()
+            loading_bar.set_postfix({"loss": loss.item(), "loss_new": loss_new.item(), "loss_old": loss_old.item()})
+
         
 
 
