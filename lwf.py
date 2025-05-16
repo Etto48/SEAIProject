@@ -2,7 +2,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-from torchvision import datasets
+from torchvision import datasets, transforms
 import torchvision
 from torch.utils.data import IterableDataset, Dataset, DataLoader
 from tqdm.auto import tqdm
@@ -123,7 +123,12 @@ class LWFClassifier(nn.Module):
         
 
 def main():
-    train_dataset = SplitCIFAR10(task_duration=10000)
+    cifar_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # ImageNet normalization
+    ])
+    train_dataset = SplitCIFAR10(task_duration=10000, transforms=cifar_transform)
     test_dataset = datasets.CIFAR10(root="data", train=False, download=True, transform=train_dataset.transform)
     model = LWFClassifier()
     model.fit(train_dataset, test_dataset)
