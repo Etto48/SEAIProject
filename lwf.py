@@ -128,7 +128,7 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # ImageNet normalization
     ])
-    train_dataset = SplitCIFAR10(task_duration=10000, transforms=cifar_transform)
+    train_dataset = SplitCIFAR10(task_duration=10000, transform=cifar_transform)
     test_dataset = datasets.CIFAR10(root="data", train=False, download=True, transform=train_dataset.transform)
     model = LWFClassifier()
     model.fit(train_dataset, test_dataset)

@@ -5,9 +5,9 @@ from torch.utils.data import IterableDataset
 import numpy as np
 
 class SplitCIFAR10(IterableDataset):
-    def __init__(self, classes_per_split=2, task_duration=1000, root="./data", download=True):
+    def __init__(self, classes_per_split=2, task_duration=1000, root="./data", download=True, transform=None):
         self.root = root
-        self.transform = transforms.ToTensor()
+        self.transform = transforms.ToTensor() if transform is None else transform
         self.download = download
         self.dataset = datasets.CIFAR10(root=self.root, train=True, download=self.download)
         self.classes_per_split = classes_per_split
