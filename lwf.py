@@ -1,8 +1,12 @@
+from matplotlib import pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
+from torchvision import datasets
 import torchvision
 from torch.utils.data import IterableDataset, Dataset, DataLoader
 from tqdm.auto import tqdm
+from split_CIFAR10 import SplitCIFAR10
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.set_default_device(device)
@@ -89,9 +93,40 @@ class LWFClassifier(nn.Module):
             loss.backward()
             self.optimizer.step()
             loading_bar.set_postfix({"loss": loss.item(), "loss_new": loss_new.item(), "loss_old": loss_old.item()})
-
+        if test_dataset is not None:
+            self.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                loading_bar = tqdm(test_loader, desc="Testing", total=len(test_loader))
+                confusion_matrix = torch.zeros(10, 10, dtype=torch.int64)
+                for x, y in loading_bar:
+                    x = x.to(device)
+                    y = y.to(device)
+                    logits, reconstructions, indices, min_reconstruction_errors, relevance_scores, mask = self(x)
+                    outputs = logits
+                    total += y.shape[0]
+                    correct += (outputs.argmax(dim=1) == y).sum().item()
+                    accuracy = correct / total
+                    confusion_matrix += torch.bincount(y * 10 + outputs.argmax(dim=1), minlength=100).reshape(10, 10)
+                    loading_bar.set_postfix(accuracy=f"{accuracy:.2%}")
+            
+            plt.figure(figsize=(10, 10))
+            plt.imshow(confusion_matrix.cpu(), interpolation='nearest')
+            plt.colorbar()
+            plt.title("Confusion Matrix")
+            plt.xlabel("Predicted Label")
+            plt.ylabel("True Label")
+            plt.xticks(np.arange(10))
+            plt.yticks(np.arange(10))
+            plt.show()
         
 
+def main():
+    train_dataset = SplitCIFAR10(task_duration=10000)
+    test_dataset = datasets.CIFAR10(root="data", train=False, download=True, transform=train_dataset.transform)
+    model = LWFClassifier()
+    model.fit(train_dataset, test_dataset)
 
 if __name__ == "__main__":
-    model = LWFClassifier()
+    main()
