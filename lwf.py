@@ -103,7 +103,7 @@ class LWFClassifier(nn.Module):
                 for x, y in loading_bar:
                     x = x.to(device)
                     y = y.to(device)
-                    logits, reconstructions, indices, min_reconstruction_errors, relevance_scores, mask = self(x)
+                    logits, _ = self(x)
                     outputs = logits
                     total += y.shape[0]
                     correct += (outputs.argmax(dim=1) == y).sum().item()
