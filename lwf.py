@@ -81,7 +81,7 @@ class LWFClassifier(nn.Module):
             
             loss_new: torch.Tensor = self.loss(output, label)
             if std > 0 and loss_new.item() > mean + self.error_threshold * std:
-                self.new_task(self.classes)
+                self.new_task(self.classes) # TODO: fix this shit
             mean, std = self.new_error(loss_new.item())
             
 
