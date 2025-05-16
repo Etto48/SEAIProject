@@ -7,8 +7,6 @@ import copy
 import matplotlib.pyplot as plt
 import numpy as np
 
-from split_CIFAR10 import SplitCIFAR10
-
 class LWFClassifier(nn.Module):
     def __init__(self, in_out_shape=(3, 32, 32), classes=10, lr=1e-3, lambda_lwf=1.0, distill_temp=2.0): # Added lr, lambda_lwf, distill_temp
         super(LWFClassifier, self).__init__()
@@ -320,7 +318,7 @@ if __name__ == "__main__":
     print(f"\\nPreparing Task 2: CIFAR-10 classes {task2_classes}")
     model.new_task(classes=len(task2_classes)) # Update model for new number of classes
     
-    train_data_task2 = SplitCIFAR10(task_duration=10000)
+    train_data_task2 = CIFAR10SubsetDataset(root='./data', train=True, download=True, transform=cifar_transform, subset_classes=task2_classes)
     test_data_task2 = CIFAR10SubsetDataset(root='./data', train=False, download=True, transform=cifar_transform, subset_classes=task2_classes)
     
     print(f"Training on Task 2 ({len(task2_classes)} classes) with LwF...")
