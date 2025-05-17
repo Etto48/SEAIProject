@@ -53,6 +53,7 @@ class LWFClassifier(nn.Module):
         self.classes = classes
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         self.error_window = []
+        self.error_window_sum = 0
 
     def forward(self, x: torch.Tensor):
         x = self.feature_extractor(x)
