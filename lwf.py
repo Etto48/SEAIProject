@@ -91,7 +91,7 @@ class LWFClassifier(nn.Module):
 
             loss_old = torch.zeros_like(loss_new)
             if old_output is not None:
-                loss_old = self.loss(output, nn.functional.softmax(old_output))
+                loss_old = self.loss(output, nn.functional.softmax(old_output, dim=1))
                 loss_old = self.old_loss_weight * loss_old
             loss: torch.Tensor = loss_new + loss_old
             loss.backward()
