@@ -16,7 +16,11 @@ class ClassificationHead(nn.Module):
     def __init__(self, in_dim: int, hidden_dim: int ,out_dim: int):
         super(ClassificationHead, self).__init__()
         self.seq = nn.Sequential(
+            nn.Dropout(0.5),
             nn.Linear(in_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, out_dim),
         )
@@ -29,11 +33,8 @@ class LWFClassifier(nn.Module):
     def __init__(self, in_out_shape=(3, 32, 32), classes=10):
         super(LWFClassifier, self).__init__()
         self.feature_extractor = torchvision.models.alexnet(weights=torchvision.models.AlexNet_Weights.IMAGENET1K_V1)
-        self.classifier_input_dim = 4096
-        self.classifier_hidden_dim = 4096
-        self.feature_extractor.classifier.pop(6)
-        self.feature_extractor.classifier.pop(5)
-        self.feature_extractor.classifier.pop(4)
+        self.classifier_input_dim = self.feature_extractor.classifier[1].in_features
+        self.classifier_hidden_dim = self.feature_extractor.classifier[1].out_features
         for param in self.feature_extractor.parameters():
             param.requires_grad = False
         
@@ -78,7 +79,8 @@ class LWFClassifier(nn.Module):
         self.batches_with_high_loss = 0
 
     def forward(self, x: torch.Tensor):
-        x = self.feature_extractor(x)
+        x = self.feature_extractor.features(x)
+        x = self.feature_extractor.avgpool(x)
         if self.old_classifier_head is not None:
             x_old = self.old_classifier_head(x)
         else:
