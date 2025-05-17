@@ -92,7 +92,12 @@ class LWFClassifier(nn.Module):
             loss: torch.Tensor = loss_new + loss_old
             loss.backward()
             self.optimizer.step()
-            loading_bar.set_postfix({"loss": loss.item(), "loss_new": loss_new.item(), "loss_old": loss_old.item()})
+            loading_bar.set_postfix({
+                "loss": loss.item(), 
+                "loss_new": loss_new.item(), 
+                "loss_old": loss_old.item(), 
+                "mean": mean, 
+                "std": std})
         if test_dataset is not None:
             self.eval()
             correct = 0
