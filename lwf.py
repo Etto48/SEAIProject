@@ -26,6 +26,7 @@ class LWFClassifier(nn.Module):
         self.classifier_head = nn.Linear(self.classifier_input_dim, classes)
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         self.loss = nn.CrossEntropyLoss()
+        self.loss_old = nn.KLDivLoss(reduction='batchmean')
 
         self.error_window_max_len = 32
         self.error_threshold = 3
@@ -91,7 +92,7 @@ class LWFClassifier(nn.Module):
 
             loss_old = torch.zeros_like(loss_new)
             if old_output is not None:
-                loss_old = self.loss(old_output, label)
+                loss_old = self.loss_old(output, old_output)
                 loss_old = self.old_loss_weight * loss_old
             loss: torch.Tensor = loss_new + loss_old
             loss.backward()
