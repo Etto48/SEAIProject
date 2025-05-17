@@ -16,7 +16,6 @@ class ClassificationHead(nn.Module):
     def __init__(self, in_dim: int, out_dim: int):
         super(ClassificationHead, self).__init__()
         self.seq = nn.Sequential(
-            nn.Dropout(0.5),
             nn.Linear(in_dim, out_dim),
         )
 
@@ -36,17 +35,17 @@ class LWFClassifier(nn.Module):
         self.old_classifier_head: nn.Linear | None = None
         self.classes = classes
         self.classifier_head = ClassificationHead(self.classifier_input_dim, classes)
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-3)
         self.loss = nn.CrossEntropyLoss()
         self.loss_old = nn.MSELoss()
 
         self.error_window_max_len = 32
-        self.error_threshold = 3
+        self.error_threshold = 10
         self.error_window = []
         self.error_window_sum = 0
 
         self.temperature = 2
-        self.old_loss_weight = 5
+        self.old_loss_weight = 1
 
     def new_error(self, error: float) -> tuple[float, float]:
         if len(self.error_window) >= self.error_window_max_len:
@@ -65,7 +64,7 @@ class LWFClassifier(nn.Module):
             param.requires_grad = False
         self.old_classifier_head.eval()
         self.classes = classes
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-3)
         self.error_window = []
         self.error_window_sum = 0
         self.batches_with_high_loss = 0
