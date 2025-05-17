@@ -28,7 +28,7 @@ class LWFClassifier(nn.Module):
         self.loss = nn.CrossEntropyLoss()
 
         self.error_window_max_len = 32
-        self.error_threshold = 3
+        self.error_threshold = 4
         self.error_window = []
         self.error_window_sum = 0
 
