@@ -26,7 +26,7 @@ class LWFClassifier(nn.Module):
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         self.loss = nn.CrossEntropyLoss()
 
-        self.error_window_max_len = 10
+        self.error_window_max_len = 32
         self.error_threshold = 3
         self.error_window = []
         self.error_window_sum = 0
@@ -68,6 +68,7 @@ class LWFClassifier(nn.Module):
         
         loading_bar = tqdm(train_loader, desc="Training", unit="batch")
         mean, std = 0, 0
+        task_changes = 0
         for batch in loading_bar:
             img, label, task = batch
             img = img.to(device)
@@ -82,6 +83,7 @@ class LWFClassifier(nn.Module):
             loss_new: torch.Tensor = self.loss(output, label)
             if len(self.error_window) == self.error_window_max_len and loss_new.item() > mean + self.error_threshold * std:
                 self.new_task(self.classes)
+                task_changes += 1
             mean, std = self.new_error(loss_new.item())
             
 
@@ -97,7 +99,8 @@ class LWFClassifier(nn.Module):
                 "loss_new": loss_new.item(), 
                 "loss_old": loss_old.item(), 
                 "mean": mean, 
-                "std": std})
+                "std": std,
+                "n": task_changes})
         if test_dataset is not None:
             self.eval()
             correct = 0
