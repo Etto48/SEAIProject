@@ -41,11 +41,12 @@ class LWFClassifier(nn.Module):
         
         self.old_classifier_head: nn.Linear | None = None
         self.classes = classes
+        self.lr = 1e-4
         self.classifier_head = ClassificationHead(
             self.classifier_input_dim, 
             self.classifier_hidden_dim,
             classes)
-        self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
         self.loss = nn.CrossEntropyLoss()
         self.loss_old = lambda logx, logy: -torch.sum(torch.softmax(logy, dim=1) * torch.log_softmax(logx, dim=1), dim=1).mean()
 
@@ -55,7 +56,7 @@ class LWFClassifier(nn.Module):
         self.error_window_sum = 0
 
         self.temperature = 2
-        self.old_loss_weight = 10
+        self.old_loss_weight = 1
 
     def new_error(self, error: float) -> tuple[float, float]:
         if len(self.error_window) >= self.error_window_max_len:
@@ -74,7 +75,7 @@ class LWFClassifier(nn.Module):
             param.requires_grad = False
         self.old_classifier_head.eval()
         self.classes = classes
-        self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
         self.error_window = []
         self.error_window_sum = 0
         self.batches_with_high_loss = 0
