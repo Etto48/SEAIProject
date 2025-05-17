@@ -35,6 +35,7 @@ class LWFClassifier(nn.Module):
         self.feature_extractor = torchvision.models.alexnet(weights=torchvision.models.AlexNet_Weights.IMAGENET1K_V1)
         self.classifier_input_dim = self.feature_extractor.classifier[1].in_features
         self.classifier_hidden_dim = self.feature_extractor.classifier[1].out_features
+        print(self.feature_extractor)
         for param in self.feature_extractor.parameters():
             param.requires_grad = False
         
@@ -81,6 +82,7 @@ class LWFClassifier(nn.Module):
     def forward(self, x: torch.Tensor):
         x = self.feature_extractor.features(x)
         x = self.feature_extractor.avgpool(x)
+        x = torch.flatten(x, 1)
         if self.old_classifier_head is not None:
             x_old = self.old_classifier_head(x)
         else:
