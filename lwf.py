@@ -47,8 +47,7 @@ class LWFClassifier(nn.Module):
             classes)
         self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-3)
         self.loss = nn.CrossEntropyLoss()
-        self.loss_old_obj = nn.CosineSimilarity()
-        self.loss_old = lambda x, y: 1 - self.loss_old_obj(x, y)
+        self.loss_old = nn.KLDivLoss(reduction='batchmean', log_target=True)
 
         self.error_window_max_len = 32
         self.error_threshold = 10
