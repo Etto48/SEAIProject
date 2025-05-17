@@ -26,7 +26,7 @@ class LWFClassifier(nn.Module):
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         self.loss = nn.CrossEntropyLoss()
 
-        self.error_window_max_len = 32
+        self.error_window_max_len = 16
         self.error_threshold = 3
         self.error_window = []
         self.error_window_sum = 0
@@ -51,6 +51,7 @@ class LWFClassifier(nn.Module):
         self.classes = classes
         self.classifier_head = nn.Linear(self.classifier_input_dim, classes)
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        self.error_window = []
 
     def forward(self, x: torch.Tensor):
         x = self.feature_extractor(x)
