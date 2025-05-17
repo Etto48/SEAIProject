@@ -116,7 +116,7 @@ class LWFClassifier(nn.Module):
             
 
             loss_old = torch.zeros_like(loss_new)
-            for i in range(len(self.old_classifier_heads)):
+            for i in range(len(old_output)):
                 loss_old += self.old_loss_weight * self.loss_old(output/self.temperature, old_output[i]/self.temperature)
             loss: torch.Tensor = loss_new + loss_old
             loss.backward()
