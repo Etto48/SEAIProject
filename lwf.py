@@ -35,7 +35,6 @@ class LWFClassifier(nn.Module):
         self.feature_extractor = torchvision.models.alexnet(weights=torchvision.models.AlexNet_Weights.IMAGENET1K_V1)
         self.classifier_input_dim = self.feature_extractor.classifier[1].in_features
         self.classifier_hidden_dim = self.feature_extractor.classifier[1].out_features
-        print(self.feature_extractor)
         for param in self.feature_extractor.parameters():
             param.requires_grad = False
         
@@ -55,7 +54,7 @@ class LWFClassifier(nn.Module):
         self.error_window_sum = 0
 
         self.temperature = 2
-        self.old_loss_weight = 1
+        self.old_loss_weight = 2.5
 
     def new_error(self, error: float) -> tuple[float, float]:
         if len(self.error_window) >= self.error_window_max_len:
