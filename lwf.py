@@ -63,6 +63,7 @@ class LWFClassifier(nn.Module):
         self.classifier_head = copy.deepcopy(self.old_classifier_head)
         for param in self.old_classifier_head.parameters():
             param.requires_grad = False
+        self.old_classifier_head.eval()
         self.classes = classes
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         self.error_window = []
