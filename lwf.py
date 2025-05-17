@@ -46,7 +46,7 @@ class LWFClassifier(nn.Module):
             self.classifier_input_dim, 
             self.classifier_hidden_dim,
             classes)
-        self.optimizer = torch.optim.SGD(self.classifier_head, lr=self.lr)
+        self.optimizer = torch.optim.SGD(self.classifier_head.parameters(), lr=self.lr)
         self.loss = nn.CrossEntropyLoss()
         self.loss_old = lambda logx, logy: -torch.sum(torch.softmax(logy, dim=1) * torch.log_softmax(logx, dim=1), dim=1).mean()
 
@@ -75,7 +75,7 @@ class LWFClassifier(nn.Module):
             param.requires_grad = False
         self.old_classifier_heads[-1].eval()
         self.classes = classes
-        self.optimizer = torch.optim.SGD(self.classifier_head, lr=self.lr)
+        self.optimizer = torch.optim.SGD(self.classifier_head.parameters(), lr=self.lr)
         self.error_window = []
         self.error_window_sum = 0
         self.batches_with_high_loss = 0
