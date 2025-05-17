@@ -36,7 +36,7 @@ class LWFClassifier(nn.Module):
         self.error_patience = 5
 
         self.temperature = 2
-        self.old_loss_weight = 10
+        self.old_loss_weight = 5
 
     def new_error(self, error: float) -> tuple[float, float]:
         if len(self.error_window) >= self.error_window_max_len:
