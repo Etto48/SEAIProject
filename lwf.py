@@ -32,11 +32,9 @@ class LWFClassifier(nn.Module):
         self.error_threshold = 3
         self.error_window = []
         self.error_window_sum = 0
-        self.batches_with_high_loss = 0
-        self.error_patience = 5
 
         self.temperature = 2
-        self.old_loss_weight = 5
+        self.old_loss_weight = 2.5
 
     def new_error(self, error: float) -> tuple[float, float]:
         if len(self.error_window) >= self.error_window_max_len:
@@ -50,7 +48,7 @@ class LWFClassifier(nn.Module):
     
     def new_task(self, classes: int):
         self.old_classifier_head = self.classifier_head
-        self.classifier_head = nn.Linear(self.classifier_input_dim, classes)
+        self.classifier_head = copy.deepcopy(self.old_classifier_head)
         for param in self.old_classifier_head.parameters():
             param.requires_grad = False
         self.classes = classes
@@ -87,10 +85,8 @@ class LWFClassifier(nn.Module):
             
             loss_new: torch.Tensor = self.loss(output, label)
             if len(self.error_window) == self.error_window_max_len and loss_new.item() > mean + self.error_threshold * std:
-                self.batches_with_high_loss += 1
-                if self.batches_with_high_loss > self.error_patience:    
-                    self.new_task(self.classes)
-                    task_changes += 1
+                self.new_task(self.classes)
+                task_changes += 1
             mean, std = self.new_error(loss_new.item())
             
 
