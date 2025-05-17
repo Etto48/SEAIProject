@@ -80,8 +80,6 @@ class LWFClassifier(nn.Module):
 
             self.optimizer.zero_grad()
             output, old_output = self(img)
-            if old_output is not None:
-                old_output /= self.temperature
             
             loss_new: torch.Tensor = self.loss(output, label)
             if len(self.error_window) == self.error_window_max_len and loss_new.item() > mean + self.error_threshold * std:
@@ -92,7 +90,7 @@ class LWFClassifier(nn.Module):
 
             loss_old = torch.zeros_like(loss_new)
             if old_output is not None:
-                loss_old = self.loss(output, nn.functional.softmax(old_output, dim=1))
+                loss_old = self.loss(output/self.temperature, nn.functional.softmax(old_output/self.temperature, dim=1))
                 loss_old = self.old_loss_weight * loss_old
             loss: torch.Tensor = loss_new + loss_old
             loss.backward()
