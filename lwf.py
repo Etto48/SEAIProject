@@ -13,10 +13,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.set_default_device(device)
 
 class ClassificationHead(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int):
+    def __init__(self, in_dim: int, hidden_dim: int ,out_dim: int):
         super(ClassificationHead, self).__init__()
         self.seq = nn.Sequential(
-            nn.Linear(in_dim, out_dim),
+            nn.Linear(in_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, out_dim),
         )
 
     def forward(self, x: torch.Tensor):
@@ -27,14 +29,20 @@ class LWFClassifier(nn.Module):
     def __init__(self, in_out_shape=(3, 32, 32), classes=10):
         super(LWFClassifier, self).__init__()
         self.feature_extractor = torchvision.models.alexnet(weights=torchvision.models.AlexNet_Weights.IMAGENET1K_V1)
-        self.classifier_input_dim = self.feature_extractor.classifier[6].in_features
+        self.classifier_input_dim = 4096
+        self.classifier_hidden_dim = 4096
         self.feature_extractor.classifier.pop(6)
+        self.feature_extractor.classifier.pop(5)
+        self.feature_extractor.classifier.pop(4)
         for param in self.feature_extractor.parameters():
             param.requires_grad = False
         
         self.old_classifier_head: nn.Linear | None = None
         self.classes = classes
-        self.classifier_head = ClassificationHead(self.classifier_input_dim, classes)
+        self.classifier_head = ClassificationHead(
+            self.classifier_input_dim, 
+            self.classifier_hidden_dim,
+            classes)
         self.optimizer = torch.optim.SGD(self.parameters(), lr=1e-3)
         self.loss = nn.CrossEntropyLoss()
         self.loss_old = nn.MSELoss()
