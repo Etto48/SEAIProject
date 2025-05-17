@@ -26,11 +26,14 @@ class LWFClassifier(nn.Module):
         self.classifier_head = nn.Linear(self.classifier_input_dim, classes)
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         self.loss = nn.CrossEntropyLoss()
+        self.loss_old = nn.MSELoss()
 
         self.error_window_max_len = 32
-        self.error_threshold = 4
+        self.error_threshold = 3
         self.error_window = []
         self.error_window_sum = 0
+        self.batches_with_high_loss = 0
+        self.error_patience = 5
 
         self.temperature = 2
         self.old_loss_weight = 1
@@ -54,6 +57,7 @@ class LWFClassifier(nn.Module):
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         self.error_window = []
         self.error_window_sum = 0
+        self.batches_with_high_loss = 0
 
     def forward(self, x: torch.Tensor):
         x = self.feature_extractor(x)
@@ -83,14 +87,16 @@ class LWFClassifier(nn.Module):
             
             loss_new: torch.Tensor = self.loss(output, label)
             if len(self.error_window) == self.error_window_max_len and loss_new.item() > mean + self.error_threshold * std:
-                self.new_task(self.classes)
-                task_changes += 1
+                self.batches_with_high_loss += 1
+                if self.batches_with_high_loss > self.error_patience:    
+                    self.new_task(self.classes)
+                    task_changes += 1
             mean, std = self.new_error(loss_new.item())
             
 
             loss_old = torch.zeros_like(loss_new)
             if old_output is not None:
-                loss_old = self.loss(output/self.temperature, nn.functional.softmax(old_output/self.temperature, dim=1))
+                loss_old = self.loss_old(output/self.temperature, old_output/self.temperature)
                 loss_old = self.old_loss_weight * loss_old
             loss: torch.Tensor = loss_new + loss_old
             loss.backward()
