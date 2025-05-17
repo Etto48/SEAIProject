@@ -39,14 +39,14 @@ class LWFClassifier(nn.Module):
         for param in self.feature_extractor.parameters():
             param.requires_grad = False
         
-        self.old_classifier_head: nn.Linear | None = None
+        self.old_classifier_heads: nn.ModuleList[ClassificationHead] = nn.ModuleList()
         self.classes = classes
         self.lr = 1e-3
         self.classifier_head = ClassificationHead(
             self.classifier_input_dim, 
             self.classifier_hidden_dim,
             classes)
-        self.optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
+        self.optimizer = torch.optim.SGD(self.classifier_head, lr=self.lr)
         self.loss = nn.CrossEntropyLoss()
         self.loss_old = lambda logx, logy: -torch.sum(torch.softmax(logy, dim=1) * torch.log_softmax(logx, dim=1), dim=1).mean()
 
@@ -56,7 +56,7 @@ class LWFClassifier(nn.Module):
         self.error_window_sum = 0
 
         self.temperature = 2
-        self.old_loss_weight = 7.5
+        self.old_loss_weight = 1
 
     def new_error(self, error: float) -> tuple[float, float]:
         if len(self.error_window) >= self.error_window_max_len:
@@ -69,13 +69,13 @@ class LWFClassifier(nn.Module):
         return mean, std
     
     def new_task(self, classes: int):
-        self.old_classifier_head = self.classifier_head
-        self.classifier_head = copy.deepcopy(self.old_classifier_head)
-        for param in self.old_classifier_head.parameters():
+        self.old_classifier_heads.append(self.classifier_head)
+        self.classifier_head = copy.deepcopy(self.classifier_head)
+        for param in self.old_classifier_heads[-1].parameters():
             param.requires_grad = False
-        self.old_classifier_head.eval()
+        self.old_classifier_heads[-1].eval()
         self.classes = classes
-        self.optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
+        self.optimizer = torch.optim.SGD(self.classifier_head, lr=self.lr)
         self.error_window = []
         self.error_window_sum = 0
         self.batches_with_high_loss = 0
@@ -84,10 +84,10 @@ class LWFClassifier(nn.Module):
         x = self.feature_extractor.features(x)
         x = self.feature_extractor.avgpool(x)
         x = torch.flatten(x, 1)
-        if self.old_classifier_head is not None:
-            x_old = self.old_classifier_head(x)
-        else:
-            x_old = None
+        x_old = []
+        for i in range(len(self.old_classifier_heads)):
+            x_old.append(self.old_classifier_heads[i](x))
+
         x = self.classifier_head(x)
         return x, x_old
 
@@ -116,9 +116,8 @@ class LWFClassifier(nn.Module):
             
 
             loss_old = torch.zeros_like(loss_new)
-            if old_output is not None:
-                loss_old = self.loss_old(output/self.temperature, old_output/self.temperature)
-                loss_old = self.old_loss_weight * loss_old
+            for i in range(len(self.old_classifier_heads)):
+                loss_old += self.old_loss_weight * self.loss_old(output/self.temperature, old_output[i]/self.temperature)
             loss: torch.Tensor = loss_new + loss_old
             loss.backward()
             self.optimizer.step()
