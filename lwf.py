@@ -16,11 +16,12 @@ class ClassificationHead(nn.Module):
     def __init__(self, in_dim: int, hidden_dim: int ,out_dim: int):
         super(ClassificationHead, self).__init__()
         self.seq = nn.Sequential(
-            nn.Dropout(0.5),
+            nn.BatchNorm1d(in_dim),
             nn.Linear(in_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
-            nn.Dropout(0.5),
             nn.Linear(hidden_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, out_dim),
         )
