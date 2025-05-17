@@ -12,6 +12,18 @@ from split_CIFAR10 import SplitCIFAR10
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.set_default_device(device)
 
+class ClassificationHead(nn.Module):
+    def __init__(self, in_dim: int, out_dim: int):
+        super(ClassificationHead, self).__init__()
+        self.seq = nn.Sequential(
+            nn.BatchNorm1d(in_dim),
+            nn.Linear(in_dim, out_dim),
+        )
+
+    def forward(self, x: torch.Tensor):
+        x = self.seq(x)
+        return x
+
 class LWFClassifier(nn.Module):
     def __init__(self, in_out_shape=(3, 32, 32), classes=10):
         super(LWFClassifier, self).__init__()
@@ -23,7 +35,7 @@ class LWFClassifier(nn.Module):
         
         self.old_classifier_head: nn.Linear | None = None
         self.classes = classes
-        self.classifier_head = nn.Linear(self.classifier_input_dim, classes)
+        self.classifier_head = ClassificationHead(self.classifier_input_dim, classes)
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         self.loss = nn.CrossEntropyLoss()
         self.loss_old = nn.MSELoss()
