@@ -1,3 +1,4 @@
+import copy
 from matplotlib import pyplot as plt
 import numpy as np
 import torch
@@ -46,10 +47,10 @@ class LWFClassifier(nn.Module):
     
     def new_task(self, classes: int):
         self.old_classifier_head = self.classifier_head
+        self.classifier_head = copy.deepcopy(self.old_classifier_head)
         for param in self.old_classifier_head.parameters():
             param.requires_grad = False
         self.classes = classes
-        self.classifier_head = nn.Linear(self.classifier_input_dim, classes)
         self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         self.error_window = []
 
