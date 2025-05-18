@@ -15,15 +15,25 @@ torch.set_default_device(device)
 class ClassificationHead(nn.Module):
     def __init__(self, in_dim: int, hidden_dim: int ,out_dim: int):
         super(ClassificationHead, self).__init__()
-        self.seq = nn.Sequential(
-            nn.Dropout(0.5),
-            nn.Linear(in_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, out_dim),
+        self.seq = (
+            nn.Conv2d(3, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
+            nn.BatchNorm2d(16, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
+            nn.ReLU(inplace=True),
+
+            nn.Sequential(
+                nn.Conv2d(in_channels=16, out_channels=128, kernel_size=3, stride=1, padding=1, bias=False),
+                nn.BatchNorm2d(num_features=128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding=1, bias=False),
+                nn.BatchNorm2d(num_features=128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
+
+                nn.Sequential(
+                    nn.Conv2d(in_channels=16, out_channels=128, kernel_size=3, stride=1, bias=False),
+                    nn.BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
+                ),
+            )
         )
+
 
     def forward(self, x: torch.Tensor):
         x = self.seq(x)
