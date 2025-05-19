@@ -151,44 +151,36 @@ class WideResNet(nn.Module):
 # Assuming ClassificationHead(input_dim, hidden_dim, classes) is the intended signature.
 
 class LWFClassifier(nn.Module):
-    def __init__(self, in_out_shape=(3, 32, 32), classes=10):
+    def __init__(self, in_out_shape=(3, 32, 32), total_classes=10, num_classes_per_task=2):
         super(LWFClassifier, self).__init__()
         
-        # Use the refactored WideResNet as the feature extractor
-        # WRN-20-8: width_factor=8, layers=[3,3,3] (default in WideResNet)
-        # Input channels from in_out_shape
         self.feature_extractor = WideResNet(in_channels=in_out_shape[0], width_factor=8)
-        
-        # The output dimension of the feature extractor (WRN-20-8 gives 512)
         self.classifier_input_dim = self.feature_extractor.feature_dim 
-        
-        # Assuming ClassificationHead uses a hidden layer.
-        # This value was previously derived from wide_resnet50_2's head.
-        # We set it to a common value or make it configurable. Let's use 512 or 1000.
-        # For consistency with potential previous head structures, let's use 1000.
-        # If ClassificationHead is just Linear(input_dim, classes), this might be unused or reinterpreted.
-        self.classifier_hidden_dim = 1000 # Or another suitable value like 512
+        self.classifier_hidden_dim = 1000
 
-        # Freeze the feature extractor parameters (standard for LwF)
-        for param in self.feature_extractor.parameters():
-            param.requires_grad = False
+        # DO NOT FREEZE the feature extractor if it's trained from scratch
+        # for param in self.feature_extractor.parameters():
+        #     param.requires_grad = False 
         
-        self.old_classifier_heads: nn.ModuleList = nn.ModuleList() # Stores old task heads
-        self.classes = classes # Number of classes for the current task
-        self.lr = 1e-3 # Learning rate
+        self.old_classifier_heads: nn.ModuleList = nn.ModuleList()
+        
+        self.total_classes = total_classes
+        self.num_classes_per_task = num_classes_per_task
+        self.classes = self.total_classes 
 
-        # Initialize the classifier head for the current task
-        # This assumes ClassificationHead takes (input_features, hidden_layer_size, output_classes)
-        # If ClassificationHead is not defined, you'll need to provide its implementation.
+        self.lr = 0.01 # Increased learning rate for training from scratch
         self.classifier_head = ClassificationHead(
             self.classifier_input_dim, 
             self.classifier_hidden_dim,
-            classes
+            self.total_classes 
         )
         
-        self.optimizer = torch.optim.SGD(self.classifier_head.parameters(), lr=self.lr)
-        self.loss = nn.CrossEntropyLoss() # Loss for the current task
-        # Distillation loss for old tasks
+        # Optimizer now includes parameters from both feature_extractor and classifier_head
+        self.optimizer = torch.optim.SGD(
+            list(self.feature_extractor.parameters()) + list(self.classifier_head.parameters()), 
+            lr=self.lr
+        )
+        self.loss = nn.CrossEntropyLoss()
         self.loss_old = lambda logx, logy: -torch.sum(torch.softmax(logy, dim=1) * torch.log_softmax(logx, dim=1), dim=1).mean()
 
         # Parameters for task change detection (anomaly detection)
@@ -197,9 +189,9 @@ class LWFClassifier(nn.Module):
         self.error_window = []
         self.error_window_sum = 0
 
-        # LwF parameters
-        self.temperature = 2 # Temperature for distillation
-        self.old_loss_weight = 1 # Weight for the distillation loss
+        self.temperature = 2
+        self.old_loss_weight = 1
+        self.current_task_id_inferred = 0 # Model's internal belief of current task, for capping new_task calls
 
     def new_error(self, error: float) -> tuple[float, float]:
         if len(self.error_window) >= self.error_window_max_len:
@@ -211,38 +203,42 @@ class LWFClassifier(nn.Module):
         std = (sum((x - mean) ** 2 for x in self.error_window) / len(self.error_window)) ** 0.5
         return mean, std
     
-    def new_task(self, classes: int):
-        self.old_classifier_heads.append(self.classifier_head)
-        # Re-initialize or deepcopy the head for the new task
-        # Important: Ensure new head is properly initialized for the new number of classes
-        self.classifier_head = ClassificationHead(
-            self.classifier_input_dim,
-            self.classifier_hidden_dim,
-            classes # Use the new number of classes
-        )
-        # self.classifier_head = copy.deepcopy(self.classifier_head) # If structure is identical
-        # If classes can change, direct re-initialization is better as above.
-
+    # Called when loss anomaly detected. Head structure does not change (always total_classes).
+    def new_task(self): 
+        print(f"\\\\nLoss-based anomaly detected. Saving current {self.total_classes}-class head and deepcopying for continued training.")
+        self.current_task_id_inferred +=1 # Increment model's internal inferred task counter
+        
+        self.old_classifier_heads.append(self.classifier_head) # Save the current head
+        # New head starts with the weights of the old one (LwF principle)
+        self.classifier_head = copy.deepcopy(self.classifier_head) 
+        
+        # Freeze parameters of the saved old head
         for param in self.old_classifier_heads[-1].parameters():
             param.requires_grad = False
         self.old_classifier_heads[-1].eval()
         
-        self.classes = classes # Update current number of classes
-        self.optimizer = torch.optim.SGD(self.classifier_head.parameters(), lr=self.lr)
+        # Ensure the new head is trainable (it should be by default after deepcopy)
+        for param in self.classifier_head.parameters():
+            param.requires_grad = True
+        
+        # Re-initialize optimizer with feature_extractor parameters and the NEW classifier_head parameters
+        self.optimizer = torch.optim.SGD(
+            list(self.feature_extractor.parameters()) + list(self.classifier_head.parameters()), 
+            lr=self.lr
+        )
         self.error_window = []
         self.error_window_sum = 0
-        self.batches_with_high_loss = 0
 
     def forward(self, x: torch.Tensor):
         # Extract features using the new WideResNet
         features = self.feature_extractor(x)
         
-        # Get outputs from old task heads (for distillation)
         x_old = []
         for i in range(len(self.old_classifier_heads)):
+            # Old heads are also total_classes-dimensional
             x_old.append(self.old_classifier_heads[i](features))
 
-        # Get output from the current task head
+        # Current head is total_classes-dimensional
         x_current = self.classifier_head(features)
         return x_current, x_old
 
@@ -253,75 +249,52 @@ class LWFClassifier(nn.Module):
         
         loading_bar = tqdm(train_loader, desc="Training", unit="batch")
         mean, std = 0, 0
-        task_changes = 0
-        for batch in loading_bar:
-            img, label, task = batch
+        # task_changes counts how many times new_task is called (inferred task changes)
+        # This is self.current_task_id_inferred now, starting from 0 for the first task.
+        # So, number of *changes* will be self.current_task_id_inferred.
+
+        for batch_idx, batch in enumerate(loading_bar):
+            # original_label are global labels (e.g., 0-9 for CIFAR-10)
+            # task_id_tensor indicates the task segment from SplitCIFAR10 (e.g., 0, 1, 2, 3, 4)
+            img, original_label, task_id_tensor = batch 
             img = img.to(device)
-            label = label.to(device)
-            task = task.to(device) # Assuming task indicates task ID or properties
+            original_label = original_label.to(device) # Use global labels directly
+            # task_id_tensor = task_id_tensor.to(device) # Not used for loss or head switching
 
             self.optimizer.zero_grad()
-            # The forward pass now returns (current_task_output, list_of_old_task_outputs)
+            # output is from the current total_classes-dimensional head
             output, old_outputs_from_model = self(img) 
             
-            loss_new: torch.Tensor = self.loss(output, label)
-            
-            # Task change detection logic
-            # Ensure self.classes reflects the expected classes for the current data
-            # The new_task method should be called if a task boundary is detected.
-            # The current logic for new_task might need adjustment if 'task' from batch signals a new task.
-            # For now, assuming the error-based detection is the primary mechanism.
+            # Loss for the current task, using global original_label
+            loss_new: torch.Tensor = self.loss(output, original_label)
             current_loss_val = loss_new.item()
-            if len(self.error_window) == self.error_window_max_len and current_loss_val > mean + self.error_threshold * std:
-                # This implies a new task based on loss anomaly.
-                # Need to know the number of classes for this new task.
-                # This part is complex if classes change and are not known beforehand.
-                # For simplicity, if SplitCIFAR10 yields tasks with same number of classes, this is fine.
-                # If classes per task can vary, `new_task` needs the correct `classes` count.
-                # Assuming self.classes is appropriate for the new task or updated externally.
-                print(f"Potential new task detected. Loss: {current_loss_val:.4f}, Mean: {mean:.4f}, Std: {std:.4f}")
-                # self.new_task(self.classes) # Or determine new number of classes
-                task_changes += 1 # Incrementing, but actual new_task call might be conditional
-            mean, std = self.new_error(current_loss_val)
+
+            # --- Loss-based Anomaly Detection for Task Change ---
+            # Max inferred changes: (total_dataset_classes / num_classes_per_task_in_split) - 1
+            # E.g. CIFAR-10 (10 classes) split into 5 tasks of 2 classes each: (10/2)-1 = 4 changes.
+            # self.current_task_id_inferred tracks the number of tasks seen (0 for 1st, 1 for 2nd, etc.)
+            # So, number of changes = self.current_task_id_inferred.
+            max_inferred_task_segments = (self.total_classes // self.num_classes_per_task)
+            if len(self.error_window) >= self.error_window_max_len and current_loss_val > mean + self.error_threshold * std:
+                if self.current_task_id_inferred < max_inferred_task_segments -1 : 
+                    self.new_task() # This increments self.current_task_id_inferred
+                    mean, std = 0, 0 # Reset error stats for the new inferred task
+                    print(f"Batch {batch_idx}: New task inferred by loss. Model now on internal inferred task ID: {self.current_task_id_inferred}.")
+                else:
+                    print(f"Batch {batch_idx}: High loss detected but max task changes ({max_inferred_task_segments -1}) reached. Loss: {current_loss_val:.4f}")
             
-            loss_distillation = torch.zeros_like(loss_new)
+            if not (mean == 0 and std == 0 and len(self.error_window) == 0) or current_loss_val !=0: # Avoid division by zero if window empty
+                 mean, std = self.new_error(current_loss_val)
+            # --- End Anomaly Detection ---
+            
+            loss_distillation = torch.tensor(0.0, device=device)
             if len(self.old_classifier_heads) > 0 and len(old_outputs_from_model) > 0:
-                # Calculate distillation loss using the model's stored old heads
-                # and their corresponding outputs from the forward pass.
-                # This assumes old_outputs_from_model are the raw logits from old heads.
                 for i in range(len(old_outputs_from_model)):
-                    # Ensure old_outputs_from_model[i] corresponds to self.old_classifier_heads[i]
-                    # The distillation target should be the soft labels from the *frozen* old model's head
-                    # For LwF, the old_outputs_from_model are predictions on current data using old heads.
-                    # The target for distillation is y_o_hat = sigma(o_o / T) where o_o are logits from old model on old task data
-                    # Here, we are using current data, new model's features, and old heads.
-                    # The loss_old function expects (current_model_logits_for_old_task, target_distill_logits)
-                    # This setup is tricky. If `output` is for current task, and `old_outputs_from_model` are for old tasks.
-                    # The LwF paper typically distills by having the new model try to reproduce the old model's outputs *for the old tasks*.
-                    # This usually means passing current input through new feature extractor, then through *copies* of old heads,
-                    # and comparing these to the *original* old model's (old feature extractor + old head) outputs for those old tasks.
-                    # The current code seems to use `output` (current task logits) in the distillation loss against `old_output[i]` (old task logits from current features).
-                    # This is non-standard LwF. Standard LwF: L_distill = sum_{old_tasks} KLDiv( new_model_pred_on_old_task_i || old_model_pred_on_old_task_i)
-                    # Or, if using current data: L_distill = sum_{old_tasks} CrossEntropy( new_model_pred_for_old_task_i_using_current_data, old_model_pred_for_old_task_i_using_current_data (frozen) )
-                    
-                    # Given the existing loss_old: lambda logx, logy: -torch.sum(torch.softmax(logy, dim=1) * torch.log_softmax(logx, dim=1), dim=1).mean()
-                    # logx: current model's prediction for an old task (e.g. output from a combined head, or specific head)
-                    # logy: old model's soft target for that old task
-                    # The original code had: loss_old += self.old_loss_weight * self.loss_old(output/self.temperature, old_output[i]/self.temperature)
-                    # `output` is current task's logits. `old_output[i]` is old task i's logits (from current features).
-                    # This means it's trying to make the current task's output distribution similar to each old task's output distribution. This is unusual.
-                    # A more standard LwF would be:
-                    # current_preds_for_old_task_i = self.old_classifier_heads[i](features) # features from new extractor
-                    # target_preds_for_old_task_i = old_outputs_from_model[i] # These are already from old_heads(current_features)
-                    # So, loss_distill += self.old_loss_weight * self.loss_old(current_preds_for_old_task_i / self.temperature, old_outputs_from_model[i].detach() / self.temperature)
-                    # Since old_outputs_from_model[i] are already the outputs of old_classifier_heads[i](features), this would be:
-                    # loss_distillation += self.old_loss_weight * self.loss_old(old_outputs_from_model[i]/self.temperature, old_outputs_from_model[i].detach()/self.temperature)
-                    # This is essentially making the (gradient-enabled) old head match its own detached output, which is not the goal.
-
-                    # Let's assume the intention was to use the `output` (current task's logits) and make them "not forget" old tasks by aligning with `old_outputs_from_model[i]`.
-                    # This is what the original code structure implies.
-                    loss_distillation += self.old_loss_weight * self.loss_old(output/self.temperature, old_outputs_from_model[i].detach()/self.temperature)
-
+                    # output and old_outputs_from_model[i] are both total_classes-dimensional
+                    loss_distillation += self.old_loss_weight * self.loss_old(
+                        output / self.temperature, 
+                        old_outputs_from_model[i].detach() / self.temperature
+                    )
 
             loss: torch.Tensor = loss_new + loss_distillation
             loss.backward()
@@ -330,78 +303,83 @@ class LWFClassifier(nn.Module):
                 "loss": loss.item(), 
                 "loss_new": loss_new.item(), 
                 "loss_old": loss_distillation.item(), 
-                "mean": mean, 
-                "std": std,
-                "tasks": task_changes}) # Renamed 'n' to 'tasks'
+                "mean": f"{mean:.2f}\"",
+                "std": f"{std:.2f}\"",
+                "inferredTask": self.current_task_id_inferred,
+                # "dataTaskID_eg": task_id_tensor[0].item() if task_id_tensor.numel() > 0 else -1 
+                }) 
         
         if test_dataset is not None:
             self.eval()
             correct = 0
             total = 0
+            # Evaluate using the current total_classes-dimensional head against global labels
+            confusion_matrix = torch.zeros(self.total_classes, self.total_classes, dtype=torch.int64, device=device)
+            print(f"\\\\nEvaluating with {self.total_classes}-class head.")
+
             with torch.no_grad():
-                loading_bar = tqdm(test_loader, desc="Testing", total=len(test_loader))
-                # Assuming testing is done on a single task's data, corresponding to current self.classifier_head
-                # Or, if test_dataset is multi-task, evaluation needs to be task-aware.
-                # The original code implies testing on a dataset that matches the 'current' model structure.
-                # For CIFAR10, it's 10 classes.
-                num_eval_classes = self.classes # Or fixed if test_dataset is always e.g. full CIFAR10
-                confusion_matrix = torch.zeros(num_eval_classes, num_eval_classes, dtype=torch.int64)
-                for x, y in loading_bar:
+                loading_bar = tqdm(test_loader, desc=f"Testing ({self.total_classes}-class)", total=len(test_loader))
+                for x, y_original_global in loading_bar: 
                     x = x.to(device)
-                    y = y.to(device)
-                    # self() returns (current_task_output, list_of_old_task_outputs)
-                    logits, _ = self(x) 
-                    # outputs = logits # logits are the current task's outputs
-                    total += y.shape[0]
-                    correct += (logits.argmax(dim=1) == y).sum().item()
-                    accuracy = correct / total
+                    y_original_global = y_original_global.to(device) # Global labels (e.g., 0-9)
                     
-                    # Ensure y and logits.argmax(dim=1) are within bounds for confusion_matrix
-                    y_flat = y.view(-1)
+                    # Logits are from the current total_classes-dimensional head
+                    logits, _ = self(x) 
+                    
+                    total += y_original_global.shape[0]
+                    correct += (logits.argmax(dim=1) == y_original_global).sum().item()
+                    
+                    accuracy = correct / total if total > 0 else 0.0
+                    
+                    y_flat = y_original_global.view(-1)
                     pred_flat = logits.argmax(dim=1).view(-1)
                     
-                    # Clamp values to be safe if classes change and matrix size is fixed
-                    y_clamped = torch.clamp(y_flat, 0, num_eval_classes - 1)
-                    pred_clamped = torch.clamp(pred_flat, 0, num_eval_classes - 1)
-
-                    # Update confusion matrix
-                    for i in range(y_clamped.size(0)):
-                        confusion_matrix[y_clamped[i], pred_clamped[i]] += 1
+                    for i in range(y_flat.size(0)):
+                        # Ensure indices are within bounds for the confusion matrix
+                        true_idx = y_flat[i].item()
+                        pred_idx = pred_flat[i].item()
+                        if 0 <= true_idx < self.total_classes and 0 <= pred_idx < self.total_classes:
+                            confusion_matrix[true_idx, pred_idx] += 1
+                        # else: print(f"Warning: CM index out of bounds. True: {true_idx}, Pred: {pred_idx}, Head: {self.total_classes}")
                     
                     loading_bar.set_postfix(accuracy=f"{accuracy:.2%}")
             
-            plt.figure(figsize=(10, 10))
-            plt.imshow(confusion_matrix.cpu(), interpolation='nearest')
+            plt.figure(figsize=(10, 10)) # Adjusted for potentially 10 classes
+            plt.imshow(confusion_matrix.cpu().numpy(), interpolation='nearest', cmap='Blues')
             plt.colorbar()
-            plt.title(f"Confusion Matrix (Test - {num_eval_classes} classes)")
+            plt.title(f"Confusion Matrix ({self.total_classes} classes)")
             plt.xlabel("Predicted Label")
             plt.ylabel("True Label")
-            plt.xticks(np.arange(num_eval_classes))
-            plt.yticks(np.arange(num_eval_classes))
+            plt.xticks(np.arange(self.total_classes))
+            plt.yticks(np.arange(self.total_classes))
             plt.show()
-        
 
 def main():
     cifar_transform = transforms.Compose([
-        transforms.Resize((32, 32)), # Adjusted to 32x32, common for WRN on CIFAR
-        # transforms.Resize((224, 224)), # Original resize
+        transforms.Resize((32, 32)),
         transforms.ToTensor(),
-        # Standard CIFAR-10 normalization, not ImageNet, if training from scratch
         transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010]) 
-        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # ImageNet normalization
     ])
-    # Assuming SplitCIFAR10 handles task definitions and provides data for 'classes' per task
-    # If SplitCIFAR10 yields tasks with varying numbers of classes, LWFClassifier.new_task needs that info.
-    train_dataset = SplitCIFAR10(task_duration=10000, transform=cifar_transform)
-    
-    # Test dataset should ideally cover all classes seen or be task-specific
-    test_dataset = datasets.CIFAR10(root="data", train=False, download=True, transform=train_dataset.transform)
 
-    # LWFClassifier needs to know the number of classes for the *first* task.
-    # This might come from train_dataset.get_task_info() or be explicit.
-    # Assuming initial task has 'classes_per_task' from SplitCIFAR10.
-    initial_classes = 2 # Matching example classes_per_task
-    model = LWFClassifier(in_out_shape=(3, 32, 32), classes=initial_classes) 
+    # Configuration for data splitting and model
+    total_dataset_classes = 10 # For CIFAR-10
+    num_classes_per_task_split = 2 # How SplitCIFAR10 defines tasks, e.g., 5 tasks of 2 classes
+
+    train_dataset = SplitCIFAR10(
+        task_duration=10000, # Or however long each task segment should be
+        transform=cifar_transform, 
+        classes_per_split=num_classes_per_task_split # Tells SplitCIFAR10 how to make tasks
+    )
+    
+    test_dataset = datasets.CIFAR10(root="data", train=False, download=True, transform=cifar_transform)
+
+    # LWFClassifier is initialized with total_classes for its head,
+    # and num_classes_per_task for managing inferred task change logic.
+    model = LWFClassifier(
+        in_out_shape=(3, 32, 32), 
+        total_classes=total_dataset_classes,
+        num_classes_per_task=num_classes_per_task_split
+    ) 
     model.fit(train_dataset, test_dataset)
 
 if __name__ == "__main__":
