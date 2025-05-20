@@ -36,8 +36,8 @@ class FullClassifier(nn.Module):
         self.ff = nn.Sequential()
         for i in range(self.ff_depth):
             self.ff.append(nn.Linear(width, width))
+            self.ff.append(nn.BatchNorm1d(width))
             self.ff.append(nn.ReLU())
-            self.ff.append(nn.Dropout(0.5))
         
         self.heads_in = width
         self.heads = nn.ModuleList()
@@ -58,17 +58,12 @@ class FullClassifier(nn.Module):
 class LWFClassifier(nn.Module):
     def __init__(self, in_out_shape=(3, 32, 32), classes=10):
         super(LWFClassifier, self).__init__()
-        # self.feature_extractor = torchvision.models.alexnet(weights=torchvision.models.AlexNet_Weights.IMAGENET1K_V1)
-        # self.classifier_input_dim = self.feature_extractor.classifier[1].in_features
-        # self.classifier_hidden_dim = self.feature_extractor.classifier[1].out_features
-        # for param in self.feature_extractor.parameters():
-        #   param.requires_grad = False
 
         self.old_model: Optional[FullClassifier] = None
         self.classes = classes
         self.model = FullClassifier(in_out_shape, classes)
         self.optimizer_params = {
-            "lr": 1e-3, # TODO: maybe use 1e-2?
+            "lr": 1e-3,
             "momentum": 0.9,
             "weight_decay": 0.0005
         }
@@ -120,21 +115,19 @@ class LWFClassifier(nn.Module):
         x_old = self.old_model(x) if self.old_model is not None else []
         return x_new, x_old
 
-    def predict(self, x: torch.Tensor):
+    def predict(self, x: torch.Tensor, t: torch.Tensor):
         x = self.model(x)
-        x = [torch.softmax(logits, dim=1) for logits in x]
-        # x tasks, [batch, classes]
-        max_probs = [torch.max(xi, dim=1)[0] for xi in x]
-        # max_probs tasks, [batch]
-        max_probs = torch.stack(max_probs, dim=0)
-        # [tasks, batch]
-        tasks = torch.max(max_probs, dim=0)[1]
-
+        
+        max_task = max(t.max().item(), len(x))
         # TODO: make this work even with different number of classes per task
         x = torch.stack(x, dim=0)
+        # x [task, batch, class]
+        padding = torch.zeros((max_task - x.shape[0] + 1, x.shape[1], x.shape[2]))
+        x = torch.cat((x, padding), dim=0)
+        
         output = []
         for i in range(x.shape[1]):
-            output.append(x[tasks[i], i])
+            output.append(x[t[i], i])
         output = torch.stack(output, dim=0)
         return output
 
@@ -145,10 +138,10 @@ class LWFClassifier(nn.Module):
         with torch.no_grad():
             loading_bar = tqdm(test_loader, desc="Testing", total=len(test_loader))
             confusion_matrix = torch.zeros(10, 10, dtype=torch.int64)
-            for x, y in loading_bar:
+            for x, y, t in loading_bar:
                 x = x.to(device)
                 y = y.to(device)
-                logits = self.predict(x)
+                logits = self.predict(x, t)
                 outputs = logits
                 total += y.shape[0]
                 correct += (outputs.argmax(dim=1) == y).sum().item()
@@ -157,10 +150,9 @@ class LWFClassifier(nn.Module):
                 loading_bar.set_postfix(accuracy=f"{accuracy:.2%}")
         return confusion_matrix
 
-    def fit(self, train_dataset: IterableDataset, test_dataset: Dataset | None = None):
+    def fit(self, train_dataset: IterableDataset, test_dataset: IterableDataset):
         train_loader = DataLoader(train_dataset, batch_size=32)
-        if test_dataset is not None:
-            test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+        test_loader = DataLoader(test_dataset, batch_size=32)
         
         loading_bar = tqdm(train_loader, desc="Training", unit="batch")
         mean, std = 0, 0
@@ -173,15 +165,17 @@ class LWFClassifier(nn.Module):
             label = label.to(device)
             task = task.to(device)
 
-            self.optimizer.zero_grad()
-            output, old_output = self(img)
-            loss, loss_new, loss_old = self.criterion(output, old_output, label)
-            accuracy = (output[-1].argmax(dim=1) == label).sum().item() / label.shape[0]
-            if len(self.error_window) == self.error_window_max_len and loss_new.item() > mean + self.error_threshold * std:
+            max_task_id = task.max().item()
+            if max_task_id > task_changes:
                 confusion_matrices.append(self.test(test_loader))
                 self.new_task(self.classes)
                 task_changes += 1
                 continue # skip this batch for simplicity, this batch might contain mixed tasks
+
+            self.optimizer.zero_grad()
+            output, old_output = self(img)
+            loss, loss_new, loss_old = self.criterion(output, old_output, label)
+            accuracy = (output[-1].argmax(dim=1) == label).sum().item() / label.shape[0]
             mean, std, accuracy_mean = self.new_error(loss_new.item(), accuracy)
 
             loss.backward()
@@ -218,11 +212,8 @@ class LWFClassifier(nn.Module):
         return loss_new + loss_old, loss_new, loss_old
 
 def main():
-    cifar_transform = transforms.Compose([
-        transforms.ToTensor(),
-    ])
-    train_dataset = SplitCIFAR10(task_duration=100000, transform=cifar_transform)
-    test_dataset = datasets.CIFAR10(root="data", train=False, download=True, transform=train_dataset.transform)
+    train_dataset = SplitCIFAR10(task_duration=10000)
+    test_dataset = SplitCIFAR10(task_duration=1000, train=False)
     model = LWFClassifier()
     model.fit(train_dataset, test_dataset)
 
