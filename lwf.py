@@ -126,6 +126,16 @@ class LWFClassifier(nn.Module):
         # x tasks, [batch, classes]
         max_probs = [torch.max(xi, dim=1)[0] for xi in x]
         # max_probs tasks, [batch]
+
+
+        # train del modello
+        # task 1
+        # train task 2 + loss della task 1 oltre alla 2
+        # head 1
+        # head 2 impara 2 e 1
+        # 
+
+
         max_probs = torch.stack(max_probs, dim=0)
         # [tasks, batch]
         tasks = torch.max(max_probs, dim=0)[1]
@@ -177,7 +187,7 @@ class LWFClassifier(nn.Module):
             output, old_output = self(img)
             loss, loss_new, loss_old = self.criterion(output, old_output, label)
             accuracy = (output[-1].argmax(dim=1) == label).sum().item() / label.shape[0]
-            if len(self.error_window) == self.error_window_max_len and loss_new.item() > mean + self.error_threshold * std:
+            if len(self.error_window) == self.error_window_max_len and loss_new.item() > mean + self.error_threshold * std + 0.3:
                 confusion_matrices.append(self.test(test_loader))
                 self.new_task(self.classes)
                 task_changes += 1
