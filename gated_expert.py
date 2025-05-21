@@ -17,7 +17,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.set_default_device(device)
 
 class GatedExpert(nn.Module):
-    def __init__(self, in_out_shape=(1, 28, 28), classes=10, depth=2, ff_depth=3, expert_depth=3, hidden_dim=64, latent_dim=128, task_aware=True):
+    def __init__(self, in_out_shape=(1, 28, 28), classes=10, depth=2, ff_depth=3, expert_depth=3, hidden_dim=64, latent_dim=128):
         super(GatedExpert, self).__init__()
         self.gates = nn.ModuleList()
         self.experts = nn.ModuleList()
@@ -30,18 +30,38 @@ class GatedExpert(nn.Module):
         self.expert_depth = expert_depth
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
-        self.hold_time_after_new_task = 10
-        self.time_since_new_task = 0
-        self.temperature = 2.0
-        self.error_threshold = 0.25
         self.selection_softmax = nn.Softmax(dim=0)
         self.gate_loss = nn.L1Loss(reduction='none')
         self.expert_loss = nn.CrossEntropyLoss()
-        self.task_aware = task_aware
+        self.new_task_boost = 100
+
+        self.error_window = []
+        self.error_window_size = 32
+        self.error_window_sum = 0
+
+        self.error_std_threshold = 4
+        self.error_flat_threshold = 0.01
+
+        self.fine_tune = False
+
+        self.new_task()
+
+    def add_error(self, error) -> tuple[float, float]:
+        if len(self.error_window) >= self.error_window_size:
+            self.error_window_sum -= self.error_window.pop(0)
+        self.error_window.append(error)
+        self.error_window_sum += error
+        mean = self.error_window_sum / len(self.error_window)
+        std = (sum((error - mean) ** 2 for error in self.error_window) / len(self.error_window)) ** 0.5
+        return mean, std
+
+    def reset_error_window(self):
+        self.error_window = []
+        self.error_window_sum = 0
 
     def new_task(self):
         self.time_since_new_task = 0
-        gate = GateAutoencoder(
+        gate = copy.deepcopy(self.gates[-1]) if len(self.gates) > 0 and self.fine_tune else GateAutoencoder(
             in_out_shape=self.in_out_shape,
             depth=self.depth,
             ff_depth=self.ff_depth,
@@ -50,7 +70,7 @@ class GatedExpert(nn.Module):
             latent_dim=self.latent_dim
         )
         self.gates.append(gate)
-        expert = ExpertMLP(
+        expert = copy.deepcopy(self.experts[-1]) if len(self.experts) > 0 and self.fine_tune else ExpertMLP(
             input_feature=self.latent_dim,
             depth=self.expert_depth,
             hidden_features=self.hidden_dim,
@@ -59,11 +79,9 @@ class GatedExpert(nn.Module):
         self.experts.append(expert)
         self.gate_optimizers.append(torch.optim.Adam(gate.parameters(), lr=1e-3))
         self.expert_optimizers.append(torch.optim.Adam(expert.parameters(), lr=1e-3))
+        self.reset_error_window()
     
-    def new_task_was_recently_added(self):
-        return self.time_since_new_task < self.hold_time_after_new_task and not self.task_aware
-
-    def forward(self, x: torch.Tensor, mask: torch.Tensor | None = None):
+    def forward_gates(self, x: torch.Tensor):
         # x (B, C, H, W)
         latent_representations = []
         reconstructions = []
@@ -81,16 +99,9 @@ class GatedExpert(nn.Module):
         reconstructions = torch.stack(reconstructions, dim=0)
         # latent_representations (N_gates, B, latent_dim)
         latent_representations = torch.stack(latent_representations, dim=0)
-        relevance_logits = -reconstruction_errors/self.temperature
-        if self.new_task_was_recently_added():
-            relevance_logits[-1, :] /= self.temperature
-        # relevance_scores (N_gates, B)
-        relevance_scores = self.selection_softmax(relevance_logits)
-        # indices (B)
-        min_reconstruction_errors, indices = torch.min(reconstruction_errors, dim=0)
-        # mask (N_gates, B)
-        if mask is None:
-            mask = torch.arange(len(self.gates)).unsqueeze(1) == indices.unsqueeze(0)
+        return reconstructions, latent_representations, reconstruction_errors
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor, latent_representations: torch.Tensor):
         # classes (B, classes)
         logits = torch.zeros(x.shape[0], self.classes)
         for i, expert in enumerate(self.experts):
@@ -100,12 +111,28 @@ class GatedExpert(nn.Module):
             expert_output = expert(expert_input)
             logits[mask[i]] = expert_output
 
-        return logits, reconstructions, indices, min_reconstruction_errors, relevance_scores, mask
+        return logits
+
+    def mask_from_recon_errors(self, reconstruction_errors: torch.Tensor):
+        last_task_boost = torch.zeros_like(reconstruction_errors)
+        if self.training:
+            last_task_boost[-1] = self.new_task_boost
+        min_reconstruction_errors, indices = torch.min(reconstruction_errors - last_task_boost, dim=0)
+        mask = torch.arange(len(self.gates)).unsqueeze(1) == indices.unsqueeze(0)
+        return mask, min_reconstruction_errors
 
     def mask_from_task_ids(self, task_ids: torch.Tensor):
         max_task_id = max(task_ids.max(), len(self.gates) - 1)
         mask = torch.arange(max_task_id + 1).unsqueeze(1) == task_ids.unsqueeze(0)
         return mask
+
+    def predict(self, x: torch.Tensor):
+        self.eval()
+        with torch.no_grad():
+            reconstructions, latent_representations, reconstruction_errors = self.forward_gates(x)
+            mask, _ = self.mask_from_recon_errors(reconstruction_errors)
+            logits = self.forward(x, mask, latent_representations)
+            return logits, reconstructions
 
     def fit(self, train_dataset: IterableDataset, test_dataset: Dataset | None = None):
         train_loader = DataLoader(train_dataset, batch_size=16)
@@ -113,25 +140,40 @@ class GatedExpert(nn.Module):
             test_loader = DataLoader(test_dataset, batch_size=64, generator=torch.Generator(device=device))
 
         loading_bar = tqdm(train_loader, total=len(train_loader), desc="Training", unit="batch")
+        mean, std = 0, 0
+        accuracy = 0
         for i, batch in enumerate(loading_bar):
             images, targets, task_ids = batch
             images = images.to(device)
             targets = targets.to(device)
-            task_ids = task_ids.to(device)
-            if task_ids.max() > len(self.gates) - 1:
+
+            reconstructions, latent_representations, reconstruction_errors = self.forward_gates(images)
+            mask, _ = self.mask_from_recon_errors(reconstruction_errors)
+            avg_selected_recon_errors = reconstruction_errors[mask].mean().item()
+
+            if len(self.error_window) == self.error_window_size and avg_selected_recon_errors > mean + self.error_std_threshold * std + self.error_flat_threshold:
                 self.new_task()
+                reconstructions, latent_representations, reconstruction_errors = self.forward_gates(images)
+                mask, _ = self.mask_from_recon_errors(reconstruction_errors)
+                avg_selected_recon_errors = reconstruction_errors[mask].mean().item()
+
+            mean, std = self.add_error(avg_selected_recon_errors)
 
             self.train()
-            mask = self.mask_from_task_ids(task_ids)
             for j in range(len(self.gates)):
-                if torch.all(~mask[j]):
+                if mask[j].sum() < 2: # exclude empty batches and single samples to avoid BatchNorm errors
                     continue
                 self.gate_optimizers[j].zero_grad()
                 self.expert_optimizers[j].zero_grad()
-                recon, latent = self.gates[j](images[mask[j]])
+                images_j = images[mask[j]]
+                targets_j = targets[mask[j]]
+                recon, latent = self.gates[j](images_j)
                 expert_output = self.experts[j](latent.detach())
-                gate_loss = self.gate_loss(recon, images[mask[j]]).mean()
-                expert_loss = self.expert_loss(expert_output, targets[mask[j]])
+                correct = (expert_output.argmax(dim=1) == targets_j).sum().item()
+                total = targets_j.shape[0]
+                accuracy = (correct / total) * 0.1 + accuracy * 0.9
+                gate_loss = self.gate_loss(recon, images_j).mean()
+                expert_loss = self.expert_loss(expert_output, targets_j)
                 gate_loss.backward()
                 expert_loss.backward()
                 self.gate_optimizers[j].step()
@@ -141,7 +183,10 @@ class GatedExpert(nn.Module):
                 #"loss": f"{loss.item():.3f}", 
                 "e": f"{expert_loss.item():.3f}", 
                 "g": f"{gate_loss.item():.3f}", 
-                "n": len(self.gates)})
+                "n": len(self.gates),
+                "mean": f"{mean:.3f}",
+                "std": f"{std:.3f}",
+                "acc": f"{accuracy:.2%}"})
         if test_dataset is not None:
             self.eval()
             correct = 0
@@ -152,7 +197,7 @@ class GatedExpert(nn.Module):
                 for x, y in loading_bar:
                     x = x.to(device)
                     y = y.to(device)
-                    logits, reconstructions, indices, min_reconstruction_errors, relevance_scores, mask = self(x)
+                    logits, reconstructions = self.predict(x)
                     outputs = logits
                     total += y.shape[0]
                     correct += (outputs.argmax(dim=1) == y).sum().item()
@@ -195,7 +240,6 @@ class GatedExpert(nn.Module):
 
 def main():
     train_dataset = SplitMNIST(task_duration=10000)
-    #test_dataset = datasets.MNIST(root='data', train=False, download=True, transform=train_dataset.transform, target_transform=torch.tensor)
     test_dataset = datasets.MNIST(root='data', train=False, download=True, transform=train_dataset.transform)
     model = GatedExpert()
     model.fit(train_dataset, test_dataset)
