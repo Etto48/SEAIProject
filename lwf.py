@@ -96,6 +96,10 @@ class LWFClassifier(nn.Module):
         return mean, std, accuracy_mean
     
     def new_task(self, classes: int):
+        """Adds a new task to the model and freezes the old model.
+        The number of classes can differ between tasks.
+        """
+
         self.old_model = copy.deepcopy(self.model)
         self.model.add_head(classes)
         for param in self.old_model.parameters():
@@ -115,20 +119,18 @@ class LWFClassifier(nn.Module):
         x_old = self.old_model(x) if self.old_model is not None else []
         return x_new, x_old
 
-    def predict(self, x: torch.Tensor, t: torch.Tensor):
+    def predict(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        """Returns the indices of the predicted classes for each task in the batch."""
+
         x = self.model(x)
         
-        max_task = max(t.max().item(), len(x))
-        # TODO: make this work even with different number of classes per task
-        x = torch.stack(x, dim=0)
-        # x [task, batch, class]
-        padding = torch.zeros((max_task - x.shape[0] + 1, x.shape[1], x.shape[2]))
-        x = torch.cat((x, padding), dim=0)
+        output = torch.zeros_like(t, dtype=torch.long)
+        for batch_index in range(t.shape[0]):
+            task_id = t[batch_index]
+            if task_id >= len(x):
+                raise ValueError(f"Task id {task_id} out of range")
+            output[batch_index] = x[task_id][batch_index].argmax(dim=0)
         
-        output = []
-        for i in range(x.shape[1]):
-            output.append(x[t[i], i])
-        output = torch.stack(output, dim=0)
         return output
 
     def test(self, test_loader: DataLoader):
@@ -141,12 +143,18 @@ class LWFClassifier(nn.Module):
             for x, y, t in loading_bar:
                 x = x.to(device)
                 y = y.to(device)
-                logits = self.predict(x, t)
-                outputs = logits
+                t = t.to(device)
+                known_tasks_mask = t < len(self.model.heads)
+                if not known_tasks_mask.any():
+                    continue
+                x = x[known_tasks_mask]
+                y = y[known_tasks_mask]
+                t = t[known_tasks_mask]
+                outputs = self.predict(x, t)
                 total += y.shape[0]
-                correct += (outputs.argmax(dim=1) == y).sum().item()
+                correct += (outputs == y).sum().item()
                 accuracy = correct / total
-                confusion_matrix += torch.bincount(y * 10 + outputs.argmax(dim=1), minlength=100).reshape(10, 10)
+                confusion_matrix += torch.bincount(y * 10 + outputs, minlength=100).reshape(10, 10)
                 loading_bar.set_postfix(accuracy=f"{accuracy:.2%}")
         return confusion_matrix
 
