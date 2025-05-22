@@ -36,7 +36,7 @@ class GatedExpert(nn.Module):
         self.new_task_boost = 100
 
         self.error_window = []
-        self.error_window_size = 32
+        self.error_window_size = 64
         self.error_window_sum = 0
 
         self.error_std_threshold = 4

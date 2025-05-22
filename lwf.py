@@ -79,7 +79,7 @@ class LWFClassifier(nn.Module):
         self.accuracy_window_sum = 0
 
         self.temperature = 2
-        self.old_loss_weight = 2
+        self.old_loss_weight = 1
 
     def new_error(self, error: float, accuracy: float) -> tuple[float, float]:
         if len(self.error_window) >= self.error_window_max_len:
@@ -164,7 +164,6 @@ class LWFClassifier(nn.Module):
         
         loading_bar = tqdm(train_loader, desc="Training", unit="batch")
         mean, std = 0, 0
-        task_changes = 0
         confusion_matrices = []
         for batch in loading_bar:
             self.model.train()
@@ -174,10 +173,9 @@ class LWFClassifier(nn.Module):
             task = task.to(device)
 
             max_task_id = task.max().item()
-            if max_task_id > task_changes:
+            if max_task_id > len(self.model.heads) - 1:
                 confusion_matrices.append(self.test(test_loader))
                 self.new_task(self.classes)
-                task_changes += 1
                 continue # skip this batch for simplicity, this batch might contain mixed tasks
 
             self.optimizer.zero_grad()
@@ -194,7 +192,7 @@ class LWFClassifier(nn.Module):
                 "l_old": f"{loss_old.item():.3f}", 
                 "mean": f"{mean:.3f}", 
                 "std": f"{std:.3f}",
-                "n": task_changes})
+                "n": len(self.model.heads)})
         confusion_matrices.append(self.test(test_loader))
         plt.figure(figsize=(10, 10))
         plt.subplots_adjust(wspace=0, hspace=0)
